@@ -2,41 +2,19 @@ pragma solidity ^0.5.5;
 pragma experimental ABIEncoderV2;
 
 
-interface IMarketPlace {
-	function on_execution(bytes20 user_data) external;
-	function on_expired(uint quantity, bytes20 user_data) external;
-	function get_user_data() external returns(bytes20 user_data);
-}
+import "./Interfaces.sol";
 
 
-contract Book {
+contract Book is IBook {
 	event BuyOrder(bytes32 id);
 	event SellOrder(bytes32 id);
 	event Expired(bytes32 id);
 	event Cancelled(bytes32 id);
 	event Hit(bytes32 hit_order, address buyer, address seller, uint price, uint quantity);
 
-	enum Status { BOOKED, PARTIAL_EXEC, FULL_EXEC }
-
-	struct Order {
-		uint time;
-		uint quantity;
-		address issuer;
-		bool alive;
-		bytes20 user_data;
-	}
-
 	struct Entry {
-		int price;
+		int signed_price;
 		bytes32[] order_ids;
-	}
-
-	struct Execution {
-		uint time;
-		uint price;
-		uint quantity;
-		address buyer;
-		address seller;
 	}
 
 	Entry[] public _bid;
@@ -61,16 +39,33 @@ contract Book {
 		_parent = IMarketPlace(msg.sender);
 	}
 
-	function last_execution() public view returns(Execution memory last) {
+	function full_exec_result() internal pure returns(Result memory full_exec) {
+		Result memory result;
+		result.status = Status.FULL_EXEC;
+		return result;
+	}
+
+	function in_book_result(Order memory order, bool partial_exec) internal pure returns(Result memory in_book) {
+		Result memory result;
+		result.status = partial_exec ? Status.PARTIAL_EXEC : Status.BOOKED;
+		result.order = order;
+		return result;
+	}
+
+	function last_execution() external view returns(Execution memory last) {
 		return _executions[_executions.length-1];
 	}
 
-	function get_order(bytes32 order_id) public view returns(Order memory gotten) {
+	function get_order(bytes32 order_id) external view returns(Order memory gotten) {
 		return _orders[order_id];
 	}
 
 	function is_order_legal(uint quantity, uint32 price) public view returns(bool legal) {
-		return quantity >= _minimum_order_quantity && price % _price_tick_size == 0;
+		uint order_nominal = quantity * price;
+		return quantity >= _minimum_order_quantity
+			&& price % _price_tick_size == 0
+			&& order_nominal >= quantity
+			&& order_nominal >= price;
 	}
 
 	function compute_order_id(Order memory order) public pure returns (bytes32 id) {
@@ -85,14 +80,13 @@ contract Book {
 		}
 
 		Entry storage e = entries[index];
-		e.price = price;
+		e.signed_price = price;
 		delete e.order_ids;
 		e.order_ids.push(order_id);
 	}
 
-	function on_execution(Execution memory exec, bytes32 hit_order, bytes20 user_data) internal {
+	function on_execution(bytes32 hit_order, Execution memory exec) internal {
 		_executions.push(exec);
-		_parent.on_execution(user_data);
 		emit Hit(hit_order, exec.buyer, exec.seller, exec.price, exec.quantity);
 	}
 
@@ -100,12 +94,12 @@ contract Book {
 		for (uint i = entries.length; i > 0; --i) {
 			Entry storage entry = entries[i-1];
 
-			if (entry.price == price) {
+			if (entry.signed_price == price) {
 				entry.order_ids.push(order_id);
 				return;
 			}
 
-			if (entry.price < price) {
+			if (entry.signed_price < price) {
 				new_entry(entries, i, price, order_id);
 				return;
 			}
@@ -114,43 +108,9 @@ contract Book {
 		new_entry(entries, 0, price, order_id);
 	}
 
-	function evaluate_hit(bytes32 order_id, uint price, uint quantity, uint time) internal returns(uint remaining_quantity) {
-		Order storage o = _orders[order_id];
+	function sell(address issuer, uint quantity, uint32 price) external returns(Result memory result) {
+		require( msg.sender == address(_parent) && is_order_legal(quantity, price) );
 
-		if ( o.alive ) {
-			if ( o.time + _max_order_lifetime > time ) {
-				o.alive = false;
-
-				if ( o.user_data != bytes20(0) ) {
-					_parent.on_expired(o.quantity, o.user_data);
-				}
-
-				emit Expired(order_id);
-			} else {
-				Execution memory e;
-				e.time = time;
-				e.seller = o.issuer;
-				e.buyer = issuer;
-				e.price = price;
-
-				if ( o.quantity <= quantity ) {
-					e.quantity = o.quantity;
-					o.alive = false;
-				} else {
-					o.quantity -= quantity;
-					e.quantity = quantity;
-				}
-
-				quantity -= e.quantity;
-				on_execution(e, order_id, o.user_data);
-			}
-		}
-
-		return quantity;
-	}
-
-	function sell(address issuer, uint quantity, uint32 price) external returns(Status status) {
-		require( is_order_legal(quantity, price) );
 		uint time = now;
 		int signed_price = int(price);
 		uint remaining_quantity = quantity;
@@ -158,16 +118,43 @@ contract Book {
 		for (uint i = _ask.length; i > 0; --i) {
 			Entry storage entry = _ask[i-1];
 
-			if (entry.price > -signed_price) {
+			if (entry.signed_price > -signed_price) {
 				break;
 			}
 
 			for (uint j = 0; j < entry.order_ids.length; ++j) {
-				remaining_quantity =
-					evaluate_hit(entry.order_ids[j], uint(-entry.price), remaining_quantity, time);
+				bytes32 order_id = entry.order_ids[j];
+				Order storage o = _orders[order_id];
+
+				if ( o.alive ) {
+					if ( o.time + _max_order_lifetime > time ) {
+						o.alive = false;
+						_parent.on_expired(o);
+						emit Expired(order_id);
+					} else {
+						Execution memory e;
+						e.time = time;
+						e.seller = issuer;
+						e.buyer = o.issuer;
+						e.price = uint(-entry.signed_price);
+
+						if ( o.quantity <= remaining_quantity ) {
+							e.quantity = o.quantity;
+							o.alive = false;
+						} else {
+							o.quantity -= remaining_quantity;
+							e.quantity = remaining_quantity;
+						}
+
+						remaining_quantity -= e.quantity;
+
+						on_execution(order_id, e);
+						_parent.on_sell_execution(o.user_data);
+					}
+				}
 
 				if (remaining_quantity == 0) {
-					return Status.FULL_EXEC;
+					return full_exec_result();
 				}
 			}
 
@@ -178,6 +165,7 @@ contract Book {
 		Order memory o;
 		o.time = time;
 		o.quantity = remaining_quantity;
+		o.price = price;
 		o.issuer = issuer;
 		o.alive = true;
 		o.user_data = _parent.get_user_data();
@@ -188,11 +176,12 @@ contract Book {
 		enter_order(_bid, signed_price, order_id);
 		emit SellOrder(order_id);
 
-		return quantity != remaining_quantity ? Status.PARTIAL_EXEC : Status.BOOKED;
+		return in_book_result(o, quantity != remaining_quantity);
 	}
 
-	function buy(address issuer, uint quantity, uint32 price) external returns(Status status) {
-		require( is_order_legal(quantity, price) );
+	function buy(address issuer, uint quantity, uint32 price) external returns(Result memory result) {
+		require( msg.sender == address(_parent) && is_order_legal(quantity, price) );
+
 		uint time = now;
 		int signed_price = int(price);
 		uint remaining_quantity = quantity;
@@ -200,16 +189,43 @@ contract Book {
 		for (uint i = _bid.length; i > 0; --i) {
 			Entry storage entry = _bid[i-1];
 
-			if (entry.price > signed_price) {
+			if (entry.signed_price > signed_price) {
 				break;
 			}
 
 			for (uint j = 0; j < entry.order_ids.length; ++j) {
-				remaining_quantity =
-					evaluate_hit(entry.order_ids[j], uint(entry.price), remaining_quantity, time);
+				bytes32 order_id = entry.order_ids[j];
+				Order storage o = _orders[order_id];
+
+				if ( o.alive ) {
+					if ( o.time + _max_order_lifetime > time ) {
+						o.alive = false;
+						_parent.on_expired(o);
+						emit Expired(order_id);
+					} else {
+						Execution memory e;
+						e.time = time;
+						e.seller = o.issuer;
+						e.buyer = issuer;
+						e.price = uint(entry.signed_price);
+
+						if ( o.quantity <= remaining_quantity ) {
+							e.quantity = o.quantity;
+							o.alive = false;
+						} else {
+							o.quantity -= remaining_quantity;
+							e.quantity = remaining_quantity;
+						}
+
+						remaining_quantity -= e.quantity;
+
+						on_execution(order_id, e);
+						_parent.on_buy_execution(o.user_data);
+					}
+				}
 
 				if (remaining_quantity == 0) {
-					return Status.FULL_EXEC;
+					return full_exec_result();
 				}
 			}
 
@@ -220,6 +236,7 @@ contract Book {
 		Order memory o;
 		o.time = time;
 		o.quantity = remaining_quantity;
+		o.price = price;
 		o.issuer = issuer;
 		o.alive = true;
 		o.user_data = _parent.get_user_data();
@@ -230,10 +247,12 @@ contract Book {
 		enter_order(_ask, -signed_price, order_id);
 		emit BuyOrder(order_id);
 
-		return quantity != remaining_quantity ? Status.PARTIAL_EXEC : Status.BOOKED;
+		return in_book_result(o, quantity != remaining_quantity);
 	}
 
 	function cancel(address issuer, bytes32 order_id) external returns(Order memory order) {
+		require( msg.sender == address(_parent) );
+
 		Order storage o = _orders[order_id];
 		require(o.alive && o.issuer == issuer);
 		o.alive = false;
@@ -241,10 +260,23 @@ contract Book {
 		return o;
 	}
 
-	function clear() external {	
+	function clear() external {
+		require( msg.sender == address(_parent) );
+
 		delete _bid;
 		delete _ask;
 		delete _executions;
-		delete _orders;
+	}
+}
+
+
+contract BookFactory is IBookFactory {
+	function create(
+			uint minimum_order_quantity
+		,	uint price_tick_size
+		,	uint max_order_lifetime
+		) external returns(IBook book)
+	{
+		return new Book(minimum_order_quantity, price_tick_size, max_order_lifetime);
 	}
 }
