@@ -1,2 +1,2 @@
 # Deriv888
-Ether/DAI derivative 
+Ether/DAI derivatives
