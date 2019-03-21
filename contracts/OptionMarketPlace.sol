@@ -2,8 +2,8 @@ pragma solidity ^0.5.5;
 pragma experimental ABIEncoderV2;
 
 
-import "./CoveredOption.sol";
-import "./Interfaces.sol";
+import "CoveredOption.sol";
+import "Interfaces.sol";
 
 
 contract OptionMarketPlace is IMarketPlace {

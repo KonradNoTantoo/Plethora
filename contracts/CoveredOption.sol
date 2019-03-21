@@ -1,6 +1,6 @@
 pragma solidity ^0.5.5;
 
-import 'github.com/OpenZeppelin/openzeppelin-solidity/contracts/token/ERC20/IERC20.sol';
+import 'IERC20.sol';
 
 
 
