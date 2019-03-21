@@ -117,7 +117,7 @@ contract OptionMarketPlace is IMarketPlace {
 		IBook.Execution memory execution = book.last_execution();
 		address option_address = _current_option_contract;
 		SmartOptionEthVsERC20(option_address).transferLocked(execution.seller, execution.buyer, execution.quantity);
-		_pricing_token_vault.transferFrom(address(this), execution.seller, execution.price * execution.quantity);
+		_pricing_token_vault.transfer(execution.seller, execution.price * execution.quantity);
 	}
 
 	function on_expired(IBook.Order calldata order) external {
