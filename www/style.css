@@ -1,0 +1,219 @@
+body {
+	padding: 0;
+	margin: 0;
+	font-family: sans-serif;
+}
+
+#intro {
+	position: absolute;
+	width: 100%;
+	height: 100%;
+}
+
+#intro-left {
+	width: 25%;
+	height: 100%;
+	float: left;
+	border-right: 1px solid gainsboro;
+}
+
+#intro-left>h3 {
+	padding: 0.5em;
+	text-align: center;
+	border-bottom: 1px solid gainsboro;
+}
+
+#intro-right {
+	width: 75%;
+	float: right;
+}
+
+#connection-form {
+	margin: 1em;
+	text-align: center;
+}
+
+#header {
+	display: none;
+	position: absolute;
+	border-bottom: 1px solid gainsboro;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 1.5em;
+	padding: 0.5em 0;
+}
+
+#books {
+	display: none;
+	border-right: 1px solid gainsboro;
+	width: 50%;
+	min-width: 40em;
+}
+
+#contracts {
+	display: none;
+	border-right: 1px solid gainsboro;
+	width: 24%;
+}
+
+#executions {
+	display: none;
+	width: 24%;
+}
+
+.wait {
+	display: none;
+	margin: 0 auto;
+	width: 64px;
+	height: 64px;
+	background-image: url(wait.gif);
+	background-repeat: no-repeat;
+	background-size: auto auto;
+	clear: both;
+}
+
+.column {
+	float: left;
+	margin-top: 4em;
+
+	text-align: center;
+}
+
+.section {
+	margin: 0 2em;
+	min-width: 40em;
+	clear: both;
+}
+
+.section>h3 {
+	padding-top: 1em;
+	margin-bottom: 0.5em;
+}
+
+.subsection {
+	float: left;
+	min-width: 19em;
+	margin: 0 0.5em;
+}
+
+.form {
+	width: 17em;
+	margin: 0 auto;
+	text-align: justify;
+}
+
+.form>dt {
+	border-top: 1px solid gainsboro;
+	margin-top: 0.5em;
+	padding-top: 0.5em;
+}
+
+.expired-book {
+	color: grey;
+}
+
+.expiring-book {
+	color: darkred;
+}
+
+.active-book {
+	color: darkgreen;
+}
+
+.book {
+	background-color: gainsboro;
+	margin: 0.5em 0;
+	padding: 0.5em 0.5em;
+	width: 18em;
+}
+
+.book>h5 {
+	font-size: 120%;
+}
+
+.bid {
+	float: left;
+	margin: 0 0.2em;
+	padding: 0 0.3em;
+	width: 10em;
+	background-color: white;
+	text-align: right;
+	font-family: monospace;
+}
+
+.bid>p {
+	text-align: center;
+	font-family: sans-serif;
+}
+
+.ask {
+	float: left;
+	margin: 0 0.2em;
+	padding: 0 0.3em;
+	width: 10em;
+	background-color: white;
+	text-align: left;
+	font-family: monospace;
+}
+
+.ask>p {
+	text-align: center;
+	font-family: sans-serif;
+}
+
+.owned-order {
+	font-weight: bold;
+	color: darkred;
+}
+
+.order-form {
+	clear: both;
+	padding-top: 0.5em;
+	width: 18em;
+}
+
+.order-form>input {
+	max-width: 4em;
+}
+
+.address {
+	font-family: monospace;
+	color: grey;
+	font-size: 80%;
+}
+
+.call, .put {
+	margin: 0.5em;
+	background-color: gainsboro;
+}
+
+.option-waiting {
+	color: grey;
+	font-size: 120%;
+}
+
+.option-expiring {
+	color: darkred;
+	font-size: 120%;
+}
+
+.option-running {
+	color: darkgreen;
+	font-size: 120%;
+}
+
+.option-expired {
+	color: darkred;
+	font-size: 120%;
+}
+
+.option-settled {
+	color: grey;
+	font-size: 120%;
+}
+
+.option-liquidated {
+	color: grey;
+	font-size: 120%;
+}

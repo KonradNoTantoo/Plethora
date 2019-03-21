@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+
+	<head>
+		<meta charset="utf-8">
+		<meta name="description" content="ETH/DAI derivatives">
+		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+		<title>Plethora</title>
+
+		<link rel="stylesheet" href="style.css">
+
+		<script src="https://cdn.ethers.io/scripts/ethers-v4.min.js"
+			charset="utf-8"
+			type="text/javascript"></script>
+		<script src="lib.js"
+			charset="utf-8"
+			type="text/javascript"></script>
+	</head>
+
+	<body>
+		<div id="intro">
+			<div id="intro-left">
+				<h3>Connection</h3>
+				<div id="connection-form">
+					<p>First, you need to connect your wallet provider:</p>
+					<p><button onclick="connect_metamask()">Metamask</button></p>
+				</div>
+				<div id="connection-wait" class="wait"></div>
+			</div>
+			<div id="intro-right"></div>
+		</div>
+		<div id="header">Plethora</div>
+		<div id="books" class="column">
+			<div id="books-contents">
+				<div class="section">
+					<h3>Pinned books</h3>
+					<div>
+						<!-- input id="order-depth" type="number" value="10" min="1" /-->
+						<button onclick="refresh_pinned_books()">Refresh</button>
+					</div>
+					<div class="subsection">
+						<h4>Call</h4>
+						<div id="call-books-pinned"></div>
+					</div>
+					<div class="subsection">
+						<h4>Put</h4>
+						<div id="put-books-pinned"></div>
+					</div>
+				</div>
+				<div class="section">
+					<h3>Books</h3>
+					<div>
+						<input id="book-search-depth" type="number" value="10" min="1" />
+						<button onclick="refresh_known_books()">Refresh</button>
+					</div>
+					<div class="subsection">
+						<h4>Call</h4>
+						<div id="call-books-known"></div>
+					</div>
+					<div class="subsection">
+						<h4>Put</h4>
+						<div id="put-books-known"></div>
+					</div>
+				</div>
+				<div class="section">
+					<h3>Open book</h3>
+					<div id="openbook-form">
+						<dl class="form">
+							<dt></dt>
+							<dd>
+								<select id="openbook-type">
+									<option value="call">Call</option>
+									<option value="put">Put</option>
+								</select>
+							</dd>
+							<dt>Expiry:</dt>
+							<dd><input id="openbook-expiry" type="date"></dd>
+							<dt>DAI/ETH Strike:</dt>
+							<dd><input id="openbook-strike" type="number" step="0.125"></dd>
+							<dt>Minimum order quantity (ETH):</dt>
+							<dd><input id="openbook-minqty" type="number" step="0.0001" value="0.0001"></dd>
+							<dt>Order lifetime (hours):</dt>
+							<dd><input id="openbook-orderlife" type="number" step="1" min="24" value="24"></dd>
+							<dt></dt>
+							<dd><button onclick="open_book()">Open</button></dd>
+						</dl>
+					</div>
+					<div id="openbook-wait" class="wait">
+					</div>
+				</div>
+			</div>
+		</div>
+		<div id="contracts" class="column">
+			<h2 class="title">Call</h2>
+			<div id="call-contents">
+			</div>
+			<h2 class="title">Put</h2>
+			<div id="put-contents">
+			</div>
+		</div>
+		<div id="executions" class="column">
+			<h2 class="title">Executions</h2>
+			<div id="executions-contents">
+			</div>
+		</div>
+		<script
+			charset="utf-8"
+			type="text/javascript">initiatilize_view()</script>
+	</body>
+
+</html>
