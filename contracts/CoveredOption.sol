@@ -5,12 +5,12 @@ import 'IERC20.sol';
 
 
 contract SmartOptionEthVsERC20 is IERC20 {
-	enum Status { RUNNING, EXPIRED, SETTLED, LIQUIDATED }
+	enum Status { WAITING, RUNNING, EXPIRED, SETTLED, LIQUIDATED }
 
 	uint constant SETTLEMENT_DELAY = 1 days;
 	uint constant LIQUIDATION_DELAY = 10 days;
 
-	Status private _status;
+	Status internal _status;
 
 	address public _issuer;
 
@@ -35,14 +35,14 @@ contract SmartOptionEthVsERC20 is IERC20 {
 	) public {
 		uint test_overflow = nominal * strike_per_nominal_unit;
 		require(
-				address(0) != address(_erc20_minter)
+				address(0) != address(erc20_minter)
 			&&	address(0) != buyer
 			&&	address(0) != writer
 			&&	nominal > 0
 			&&	strike_per_nominal_unit > 0
 			&&	expiry > now
-			&&	test_overflow > nominal
-			&&	test_overflow > strike_per_nominal_unit
+			&&	test_overflow >= nominal
+			&&	test_overflow >= strike_per_nominal_unit
 			);
 
 		_erc20_minter = erc20_minter;
@@ -55,7 +55,7 @@ contract SmartOptionEthVsERC20 is IERC20 {
 		_nominal_shares[buyer] = _nominal;
 		_writer = writer;
 
-		_status = Status.RUNNING;
+		_status = Status.WAITING;
 	}
 
 	function strike() external view returns(uint) {
@@ -204,7 +204,7 @@ contract SmartOptionEthVsERC20 is IERC20 {
 		return true;
 	}
 
-	function exercise(address payable buyer) external payable;
+	// function exercise(address payable buyer, uint quantity) external payable;
 }
 
 
@@ -213,46 +213,54 @@ contract CoveredEthCall is SmartOptionEthVsERC20 {
 	constructor(IERC20 erc20_minter, uint strike_per_nominal_unit, uint expiry, address buyer, address payable writer) public payable
 		SmartOptionEthVsERC20(erc20_minter, msg.value, strike_per_nominal_unit, expiry, buyer, writer)
 	{
-		require(msg.value > 0);
+		_status = Status.RUNNING;
 	}
 
-	function call(address payable buyer) public {
-		uint qty = _nominal_shares[buyer];
-		_nominal_shares[buyer] = 0;
+	function call(address payable buyer, uint quantity) public {
+		uint shares = _nominal_shares[buyer];
+		_nominal_shares[buyer] = shares - quantity;
 		require(
 				msg.sender == _issuer
 			&&	isExpired()
-			&&	qty > 0
-			&&	_erc20_minter.transferFrom(buyer, address(this), _strike_per_nominal_unit * qty)
+			&&	quantity > 0
+			&&	quantity <= shares
+			&&	_erc20_minter.transferFrom(buyer, address(this), _strike_per_nominal_unit * quantity)
 			);
-		buyer.transfer(qty);
+		buyer.transfer(quantity);
 	}
 
-	function exercise(address payable buyer) external payable {
-		call(buyer);
-	}
+	// function exercise(address payable buyer, uint quantity) external payable {
+	// 	call(buyer, quantity);
+	// }
 }
 
 
 
 contract CoveredEthPut is SmartOptionEthVsERC20 {
 	constructor(IERC20 erc20_minter, uint nominal, uint strike_per_nominal_unit, uint expiry, address buyer, address payable writer) public
-		SmartOptionEthVsERC20(erc20_minter, nominal, strike_per_nominal_unit, expiry, buyer, writer) {
-		require(_erc20_minter.transferFrom(_writer, address(this), _strike_per_nominal_unit * _nominal));
+		SmartOptionEthVsERC20(erc20_minter, nominal, strike_per_nominal_unit, expiry, buyer, writer) {}
+
+	function activate() external {
+		require(_status == Status.WAITING
+			&&	_erc20_minter.transferFrom(_writer, address(this), _strike_per_nominal_unit * _nominal)
+			);
+		_status = Status.RUNNING;
 	}
 
 	function put(address buyer) public payable {
-		uint qty = _nominal_shares[buyer];
-		_nominal_shares[buyer] = 0;
+		uint shares = _nominal_shares[buyer];
+		_nominal_shares[buyer] = shares - msg.value;
 		require(
 				msg.sender == _issuer
 			&&	isExpired()
-			&&	msg.value >= qty
-		 	&&	_erc20_minter.transfer(buyer, qty * _strike_per_nominal_unit)
+			&&	msg.value > 0
+			&&	msg.value <= shares
+		 	&&	_erc20_minter.transfer(buyer, _strike_per_nominal_unit * msg.value)
 		 	);
 	}
 
-	function exercise(address payable buyer) external payable {
-		put(buyer);
-	}
+	// function exercise(address payable buyer, uint quantity) external payable {
+	// 	require(msg.value == quantity);
+	// 	put(buyer);
+	// }
 }
