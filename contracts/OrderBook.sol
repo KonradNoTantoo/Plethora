@@ -12,6 +12,8 @@ contract Book is IBook {
 	event Cancelled(bytes32 id);
 	event Hit(bytes32 hit_order, address buyer, address seller, uint price, uint quantity);
 
+	uint constant MAX_PRICE = ~(uint256(1) << 255);
+
 	struct Entry {
 		int signed_price;
 		bytes32[] order_ids;
@@ -28,7 +30,8 @@ contract Book is IBook {
 	IMarketPlace public _parent;
 
 	constructor(
-			uint minimum_order_quantity
+			IMarketPlace parent
+		,	uint minimum_order_quantity
 		,	uint price_tick_size
 		,	uint max_order_lifetime
 		) public {
@@ -36,7 +39,7 @@ contract Book is IBook {
 		_minimum_order_quantity = minimum_order_quantity;
 		_price_tick_size = price_tick_size;
 		_max_order_lifetime = max_order_lifetime;
-		_parent = IMarketPlace(msg.sender);
+		_parent = parent;
 	}
 
 	function full_exec_result() internal pure returns(Result memory full_exec) {
@@ -60,16 +63,43 @@ contract Book is IBook {
 		return _orders[order_id];
 	}
 
-	function is_order_legal(uint quantity, uint32 price) public view returns(bool legal) {
+	function bid_size() external view returns(uint size) {
+		return _bid.length;
+	}
+
+	function ask_size() external view returns(uint size) {
+		return _ask.length;
+	}
+
+	function bid_entries(uint index) external view returns(int signed_price, uint size) {
+		Entry memory e = _bid[index];
+		return (e.signed_price, e.order_ids.length);
+	}
+
+	function ask_entries(uint index) external view returns(int signed_price, uint size) {
+		Entry memory e = _ask[index];
+		return (e.signed_price, e.order_ids.length);
+	}
+
+	function bid_order(uint entry, uint position) external view returns(bytes32 order_id) {
+		return _bid[entry].order_ids[position];
+	}
+
+	function ask_order(uint entry, uint position) external view returns(bytes32 order_id) {
+		return _ask[entry].order_ids[position];
+	}
+
+	function is_order_legal(uint quantity, uint price) public view returns(bool legal) {
 		uint order_nominal = quantity * price;
 		return quantity >= _minimum_order_quantity
 			&& price % _price_tick_size == 0
 			&& order_nominal >= quantity
-			&& order_nominal >= price;
+			&& order_nominal >= price
+			&& price <= MAX_PRICE;
 	}
 
 	function compute_order_id(Order memory order) public pure returns (bytes32 id) {
-		return keccak256(abi.encodePacked(order.time, order.user_data, order.issuer));
+		return keccak256(abi.encodePacked(order.time, order.user_data, order.issuer, order.price));
 	}
 
 	function new_entry(Entry[] storage entries, uint index, int price, bytes32 order_id) internal {
@@ -108,7 +138,7 @@ contract Book is IBook {
 		new_entry(entries, 0, price, order_id);
 	}
 
-	function sell(address issuer, uint quantity, uint32 price) external returns(Result memory result) {
+	function sell(address issuer, uint quantity, uint price) external returns(Result memory result) {
 		require( msg.sender == address(_parent) && is_order_legal(quantity, price) );
 
 		uint time = now;
@@ -127,7 +157,7 @@ contract Book is IBook {
 				Order storage o = _orders[order_id];
 
 				if ( o.alive ) {
-					if ( o.time + _max_order_lifetime > time ) {
+					if ( o.time + _max_order_lifetime < time ) {
 						o.alive = false;
 						_parent.on_expired(o);
 						emit Expired(order_id);
@@ -179,7 +209,7 @@ contract Book is IBook {
 		return in_book_result(o, quantity != remaining_quantity);
 	}
 
-	function buy(address issuer, uint quantity, uint32 price) external returns(Result memory result) {
+	function buy(address issuer, uint quantity, uint price) external returns(Result memory result) {
 		require( msg.sender == address(_parent) && is_order_legal(quantity, price) );
 
 		uint time = now;
@@ -198,7 +228,7 @@ contract Book is IBook {
 				Order storage o = _orders[order_id];
 
 				if ( o.alive ) {
-					if ( o.time + _max_order_lifetime > time ) {
+					if ( o.time + _max_order_lifetime < time ) {
 						o.alive = false;
 						_parent.on_expired(o);
 						emit Expired(order_id);
@@ -251,10 +281,11 @@ contract Book is IBook {
 	}
 
 	function cancel(address issuer, bytes32 order_id) external returns(Order memory order) {
-		require( msg.sender == address(_parent) );
-
 		Order storage o = _orders[order_id];
-		require(o.alive && o.issuer == issuer);
+		require(
+				o.alive && o.issuer == issuer
+			&&	msg.sender == address(_parent)
+			);
 		o.alive = false;
 		emit Cancelled(order_id);
 		return o;
@@ -277,6 +308,6 @@ contract BookFactory is IBookFactory {
 		,	uint max_order_lifetime
 		) external returns(IBook book)
 	{
-		return new Book(minimum_order_quantity, price_tick_size, max_order_lifetime);
+		return new Book(IMarketPlace(msg.sender), minimum_order_quantity, price_tick_size, max_order_lifetime);
 	}
 }

@@ -23,7 +23,7 @@ describe('CoveredEthCall', function() {
 	this.timeout(3000)
 
 	let provider = createMockProvider()
-	let [admin, client1, client2, client3, writer1, writer2, writer3] = getWallets(provider)
+	let [admin, client1, client2, writer1] = getWallets(provider)
 	let token
 	let call
 	const underlying_nominal = ethers.utils.parseEther('1.0')
@@ -121,7 +121,7 @@ describe('CoveredEthPut', function() {
 	this.timeout(3000)
 
 	let provider = createMockProvider()
-	let [admin, client1, client2, client3, writer1, writer2, writer3] = getWallets(provider)
+	let [admin, client1, client2, writer1] = getWallets(provider)
 	let token
 	let put
 	const underlying_nominal = ethers.utils.parseEther('1.0')

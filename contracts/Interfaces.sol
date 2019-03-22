@@ -8,9 +8,9 @@ interface IBook {
 	struct Order {
 		uint time;
 		uint quantity;
-		uint32 price;
-		address issuer;
+		uint price;
 		bool alive;
+		address issuer;
 		bytes20 user_data;
 	}
 
@@ -31,9 +31,9 @@ interface IBook {
 
 	function get_order(bytes32 order_id) external view returns(Order memory gotten);
 
-	function sell(address issuer, uint quantity, uint32 price) external returns(Result memory result);
+	function sell(address issuer, uint quantity, uint price) external returns(Result memory result);
 
-	function buy(address issuer, uint quantity, uint32 price) external returns(Result memory result);
+	function buy(address issuer, uint quantity, uint price) external returns(Result memory result);
 
 	function cancel(address issuer, bytes32 order_id) external returns(Order memory order);
 
