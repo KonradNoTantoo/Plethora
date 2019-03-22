@@ -12,11 +12,15 @@ contract Plethora is IERC20 {
 	mapping(address => mapping (address => uint256)) private _allowed;
 	mapping(address => uint) public _token_registry;
 
-	function mint(uint nb_token) external {
+	function mintFor(address owner, uint nb_token) public {
 		uint new_mass = nb_token + _mass;
-		require(new_mass > nb_token && new_mass > _mass);
-		_token_registry[msg.sender] += nb_token;
+		require(new_mass >= nb_token && new_mass >= _mass);
+		_token_registry[owner] += nb_token;
 		_mass = new_mass;
+	}
+
+	function mint(uint nb_token) external {
+		mintFor(msg.sender, nb_token);
 	}
 
 	/**
