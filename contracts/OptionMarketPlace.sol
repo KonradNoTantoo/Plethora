@@ -48,13 +48,17 @@ contract OptionMarketPlace is IMarketPlace {
 		_book_factory = IBookFactory(book_factory);
 	}
 
+	function get_book_address(uint expiry, uint strike_per_nominal_unit) external view returns(address book) {
+		return address(_books[expiry][strike_per_nominal_unit]);
+	}
+
 	modifier reset_order_state() {
 		_;
 		_current_order_book = address(0);
 		_current_option_contract = address(0);
 	}
 
-	function buy(address book_address, uint quantity, uint32 price) reset_order_state external returns(IBook.Status order_status) {
+	function buy(address book_address, uint quantity, uint price) reset_order_state external returns(IBook.Status order_status) {
 		BookData memory data = _book_data[book_address];
 		require(data.expiry > now);
 
@@ -72,7 +76,7 @@ contract OptionMarketPlace is IMarketPlace {
 		return result.status;
 	}
 
-	function sell_contract(address book_address, SmartOptionEthVsERC20 option_contract, uint quantity, uint32 price) reset_order_state internal returns(IBook.Status order_status) {
+	function sell_contract(address book_address, SmartOptionEthVsERC20 option_contract, uint quantity, uint price) reset_order_state internal returns(IBook.Status order_status) {
 		IBook book = IBook(book_address);
 		_current_order_book = book_address;
 		_current_option_contract = address(option_contract);
@@ -152,7 +156,8 @@ contract OptionMarketPlace is IMarketPlace {
 		require(address(0) == address(_books[expiry][strike_per_nominal_unit])
 			&&	strike_per_nominal_unit > 0
 			&&	max_order_lifetime >= MINIMUM_ORDER_LIFETIME
-			&&	msg.value == BOOK_OPENING_FEE);
+			&&	msg.value == BOOK_OPENING_FEE
+			);
 
 		IBook book = _book_factory.create(minimum_order_quantity, price_tick_size, max_order_lifetime);
 		_books[expiry][strike_per_nominal_unit] = book;
@@ -198,7 +203,7 @@ contract CallMarketPlace is OptionMarketPlace {
 	constructor(address pricing_token_vault, address book_factory) public
 		OptionMarketPlace(pricing_token_vault, book_factory) {}
 
-	function sell(address book_address, uint32 price) external payable returns(IBook.Status order_status) {
+	function sell(address book_address, uint price) external payable returns(IBook.Status order_status) {
 		BookData memory data = _book_data[book_address];
 		require(data.expiry > now);
 		SmartOptionEthVsERC20 option = (new CoveredEthCall).value(msg.value)(
@@ -216,7 +221,7 @@ contract CallMarketPlace is OptionMarketPlace {
 			,	price);
 	}
 
-	function sell_secondary(address book_address, uint quantity, uint32 price, address option_address) external returns(IBook.Status order_status) {
+	function sell_secondary(address book_address, uint quantity, uint price, address option_address) external returns(IBook.Status order_status) {
 		CoveredEthCall option_contract = CoveredEthCall(option_address);
 		BookData memory data = _book_data[book_address];
 		require(data.expiry > now
@@ -242,7 +247,7 @@ contract PutMarketPlace is OptionMarketPlace {
 	constructor(address pricing_token_vault, address book_factory) public
 		OptionMarketPlace(pricing_token_vault, book_factory) {}
 
-	function sell(address book_address, uint quantity, uint32 price) external payable returns(IBook.Status order_status) {
+	function sell(address book_address, uint quantity, uint price) external payable returns(IBook.Status order_status) {
 		BookData memory data = _book_data[book_address];
 		require(data.expiry > now);
 		SmartOptionEthVsERC20 option = new CoveredEthPut(
@@ -261,7 +266,7 @@ contract PutMarketPlace is OptionMarketPlace {
 			,	price);
 	}
 
-	function sell_secondary(address book_address, uint quantity, uint32 price, address option_address) external returns(IBook.Status order_status) {
+	function sell_secondary(address book_address, uint quantity, uint price, address option_address) external returns(IBook.Status order_status) {
 		CoveredEthPut option_contract = CoveredEthPut(option_address);
 		BookData memory data = _book_data[book_address];
 		require(data.expiry > now
