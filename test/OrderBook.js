@@ -9,23 +9,12 @@ chai.use(solidity)
 const {expect} = chai
 
 
-function check( done, f ) {
-  try {
-    f()
-    done()
-  } catch( e ) {
-    done( e )
-  }
-}
-
-
 describe('Book', function() {
-	this.timeout(4000)
-
 	let provider = createMockProvider()
-	let [admin, client1, client2, client3] = getWallets(provider)
+	let [admin, client1, client2] = getWallets(provider)
 	let market
 	let client1_market
+	let client2_market
 	let book
 	const minimum_quantity = ethers.utils.parseEther('0.01')
 	const tick_size = ethers.utils.parseEther('0.0001')
@@ -222,7 +211,9 @@ describe('Book', function() {
 		expect(await book.ask_size()).to.eq(1)
 		const order_id = await book.ask_order(0, 0)
 
-		await client1_market.cancel(book.address, order_id)
+		await expect(client1_market.cancel(book.address, order_id))
+			.to.emit(book, "Cancelled")
+			.withArgs(order_id)
 
 		const order = await book.get_order(order_id)
 		expect(order.alive).is.false
@@ -245,6 +236,6 @@ describe('Book', function() {
 			.not.to.emit(book, 'Hit')
 
 		expect(await book.ask_size()).to.eq(0) // dead order has been removed
-		expect(await book.bid_size()).to.eq(1) // opposite order has been added
+		expect(await book.bid_size()).to.eq(1) // opposite order has been booked
 	})
 })
