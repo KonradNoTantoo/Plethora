@@ -139,7 +139,7 @@ describe('CoveredEthPut', function() {
 		put = await deployContract(admin, CoveredEthPut, [token.address, underlying_nominal, strike, in_one_second(), client1.address, writer1.address], override)
 
 		const tokenFromWriter1 = token.connect(writer1)
-		await tokenFromWriter1.approve(put.address, nb_tokens)
+		await tokenFromWriter1.transfer(put.address, nb_tokens)
 		await put.activate()
 	})
 
