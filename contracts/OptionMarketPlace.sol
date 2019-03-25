@@ -248,7 +248,7 @@ contract PutMarketPlace is OptionMarketPlace {
 	function sell(address book_address, uint quantity, uint price) external payable returns(IBook.Status order_status) {
 		BookData memory data = _book_data[book_address];
 		require(data.expiry > now);
-		SmartOptionEthVsERC20 option = new CoveredEthPut(
+		CoveredEthPut option = new CoveredEthPut(
 				_pricing_token_vault
 			,	quantity
 			,	data.strike_per_nominal_unit
@@ -256,6 +256,8 @@ contract PutMarketPlace is OptionMarketPlace {
 			,	msg.sender
 			,	msg.sender
 			);
+		_pricing_token_vault.transferFrom(msg.sender, address(option), quantity*data.strike_per_nominal_unit);
+		option.activate();
 		_options.push(option);
 		emit PutEmission(msg.sender, address(option));
 		return sell_contract(
@@ -268,7 +270,7 @@ contract PutMarketPlace is OptionMarketPlace {
 	function sell_secondary(address book_address, uint quantity, uint price, address option_address) external returns(IBook.Status order_status) {
 		CoveredEthPut option_contract = CoveredEthPut(option_address);
 		BookData memory data = _book_data[book_address];
-		require(data.expiry > now
+		require(option_contract.getStatus() == SmartOptionEthVsERC20.Status.RUNNING
 			&&	data.expiry == option_contract._expiry()
 			&&	data.strike_per_nominal_unit == option_contract._strike_per_nominal_unit()
 			&&	address(this) == option_contract._issuer()

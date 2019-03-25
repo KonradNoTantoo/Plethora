@@ -242,7 +242,7 @@ contract CoveredEthPut is SmartOptionEthVsERC20 {
 
 	function activate() external {
 		require(_status == Status.WAITING
-			&&	_erc20_minter.transferFrom(_writer, address(this), _strike_per_nominal_unit * _nominal)
+			&&	_erc20_minter.balanceOf(address(this)) == _strike_per_nominal_unit * _nominal
 			);
 		_status = Status.RUNNING;
 	}
