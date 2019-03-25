@@ -81,23 +81,24 @@ contract OptionMarketPlace is IMarketPlace {
 		_current_order_book = book_address;
 		_current_option_contract = address(option_contract);
 		option_contract.lock(msg.sender, quantity);
-		return book.sell(msg.sender, msg.value, price).status;
+		return book.sell(msg.sender, quantity, price).status;
+	}
+
+	function on_dead_order(IBook.Order memory order) internal {
+		if(order.user_data != bytes20(0))
+		{
+			SmartOptionEthVsERC20(address(order.user_data)).unlock(order.issuer, order.quantity);
+		}
+		else
+		{
+			_pricing_token_vault.transfer(order.issuer, order.quantity*order.price);
+		}
 	}
 
 	function cancel(address book_address, bytes32 order_id) external {
 		BookData memory data = _book_data[book_address];
 		require(data.expiry > 0);
-		IBook book = IBook(book_address);
-		IBook.Order memory o = book.cancel(msg.sender, order_id);
-
-		if (o.user_data != bytes20(0))
-		{
-			SmartOptionEthVsERC20(address(o.user_data)).unlock(o.issuer, o.quantity);
-		}
-		else
-		{
-			_pricing_token_vault.transfer(o.issuer, o.quantity*o.price);
-		}
+		on_dead_order( IBook(book_address).cancel(msg.sender, order_id) );
 	}
 
 	function on_buy_execution(bytes20 hit_order_user_data) external {
@@ -126,15 +127,7 @@ contract OptionMarketPlace is IMarketPlace {
 
 	function on_expired(IBook.Order calldata order) external {
 		require(msg.sender == _current_order_book);
-
-		if(order.user_data != bytes20(0))
-		{
-			SmartOptionEthVsERC20(address(order.user_data)).unlock(order.issuer, order.quantity);
-		}
-		else
-		{
-			_pricing_token_vault.transfer(order.issuer, order.quantity*order.price);
-		}
+		on_dead_order(order);
 	}
 
 	function get_user_data() external returns(bytes20 order_user_data) {
@@ -200,6 +193,8 @@ contract OptionMarketPlace is IMarketPlace {
 
 
 contract CallMarketPlace is OptionMarketPlace {
+	event CallEmission(address writer, address option);
+
 	constructor(address pricing_token_vault, address book_factory) public
 		OptionMarketPlace(pricing_token_vault, book_factory) {}
 
@@ -214,6 +209,7 @@ contract CallMarketPlace is OptionMarketPlace {
 			,	msg.sender
 			);
 		_options.push(option);
+		emit CallEmission(msg.sender, address(option));
 		return sell_contract(
 				book_address
 			,	option
@@ -244,6 +240,8 @@ contract CallMarketPlace is OptionMarketPlace {
 
 
 contract PutMarketPlace is OptionMarketPlace {
+	event PutEmission(address writer, address option);
+
 	constructor(address pricing_token_vault, address book_factory) public
 		OptionMarketPlace(pricing_token_vault, book_factory) {}
 
@@ -259,6 +257,7 @@ contract PutMarketPlace is OptionMarketPlace {
 			,	msg.sender
 			);
 		_options.push(option);
+		emit PutEmission(msg.sender, address(option));
 		return sell_contract(
 				book_address
 			,	option

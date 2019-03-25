@@ -3,8 +3,10 @@ const ethers = require('ethers')
 const {createMockProvider, deployContract, getWallets, solidity} = require('ethereum-waffle')
 
 const Plethora = require('../build/Plethora')
+const Book = require('../build/Book')
 const BookFactory = require('../build/BookFactory')
 const CallMarketPlace = require('../build/CallMarketPlace')
+const CoveredEthCall = require('../build/CoveredEthCall')
 
 chai.use(solidity)
 const {expect} = chai
@@ -19,12 +21,14 @@ describe('CallMarketPlace', function() {
 	this.timeout(4000)
 
 	let provider = createMockProvider()
-	let [admin, client1, client2] = getWallets(provider)
+	let [admin, client1, client2, client3] = getWallets(provider)
 	let token
 	let factory
 	let market
 	let client1_market
 	let client2_market
+	let client3_market
+	let book
 	let book_address
 	const minimum_quantity = ethers.utils.parseEther('0.01')
 	const tick_size = ethers.utils.parseEther('0.0001')
@@ -37,15 +41,26 @@ describe('CallMarketPlace', function() {
 	function q(qty) { return minimum_quantity.add(qty) }
 	function p(px) { return tick_size.mul(px) }
 
+	async function call_from_order_id(order_id) {
+		const order = await book.get_order(order_id)
+		expect(ethers.utils.bigNumberify(order.user_data).isZero()).to.be.false
+		return new ethers.Contract(order.user_data, CoveredEthCall.abi, admin)
+	}
+
+	async function mint_and_approve(wallet, qty) {
+		const connection = token.connect(wallet)
+		await connection.mint(qty)
+		await connection.approve(market.address, qty)
+	}
+
 	beforeEach(async () => {
 		token = await deployContract(admin, Plethora, [])
 		factory = await deployContract(admin, BookFactory, [])
 		market = await deployContract(admin, CallMarketPlace, [token.address, factory.address], max_gas)
 
-		await token.mintFor(client1.address, nb_tokens)
-
 		client1_market = market.connect(client1)
 		client2_market = market.connect(client2)
+		client3_market = market.connect(client3)
 
 		const today_offset = Math.floor( await market.to_expiry_offset(now()) / SECONDS_IN_A_DAY )
 		const in_two_days_offset = (today_offset + 2)*SECONDS_IN_A_DAY
@@ -60,6 +75,7 @@ describe('CallMarketPlace', function() {
 
 		book_address = await market.get_book_address( offset_to_expiry((today_offset + 2)*SECONDS_IN_A_DAY), strike )
 		expect(book_address).is.not.eq(0)
+		book = new ethers.Contract(book_address, Book.abi, admin)
 	})
 
 	it('Bad orders', async () => {
@@ -94,186 +110,276 @@ describe('CallMarketPlace', function() {
 		const qty = q(100)
 		const px = p(3)
 		const nominal = qty.mul(px)
-		const tokenFromClient1 = token.connect(client1)
-		await tokenFromClient1.approve(market.address, nominal)
+
+		await mint_and_approve(client1, nominal)
 		await client1_market.buy(book_address, qty, px, max_gas)
 
-		expect(await token.balanceOf(client1.address)).is.eq(nb_tokens.sub(nominal))
+		expect(await token.balanceOf(market.address)).is.eq(nominal)
+		expect(await token.balanceOf(client1.address)).is.eq(0)
+
+		const order_id = await book.ask_order(0, 0)
+		const order = await book.get_order(order_id)
+		expect(ethers.utils.bigNumberify(order.user_data).isZero()).to.be.true
 	})
-/*
+
 	it('Place sell order', async () => {
 		const qty = q(100)
 		const px = p(3)
-		await expect(client1_market.sell(book_address, qty, px, max_gas))
-			.to.emit(book, 'SellOrder')
-		expect(await book.bid_size()).to.eq(1)
+
+		const gas_and_value = {
+			gasLimit: 6000000,
+			value: qty
+		}
+
+		await expect(client1_market.sell(book_address, px, gas_and_value))
+			.to.emit(client1_market, 'CallEmission')
 		const order_id = await book.bid_order(0, 0)
-		const order = await book.get_order(order_id)
-		expect(order.quantity).is.eq(qty)
-		expect(order.issuer).is.eq(client1.address)
-		expect(order.price).is.eq(px)
-	})
-
-	it('Place two sell orders at same price', async () => {
-		const qty1 = q(100)
-		const qty2 = q(100)
-		const px = p(3)
-		await expect(client1_market.sell(book_address, qty1, px, max_gas))
-			.to.emit(book, 'SellOrder')
-		await expect(client2_market.sell(book_address, qty2, px, max_gas))
-			.to.emit(book, 'SellOrder')
-		expect(await book.bid_size()).to.eq(1)
-
-		const [entry_price, nb_entries] = await book.bid_entries(0)
-		expect(entry_price).is.eq(px)
-		expect(nb_entries).is.eq(2)
-
-		const order1_id = await book.bid_order(0, 0)
-		const order1 = await book.get_order(order1_id)
-		expect(order1.quantity).is.eq(qty1)
-		expect(order1.issuer).is.eq(client1.address)
-		expect(order1.price).is.eq(px)
-		expect(order1.alive).is.true
-
-		const order2_id = await book.bid_order(0, 1)
-		const order2 = await book.get_order(order2_id)
-		expect(order2.quantity).is.eq(qty2)
-		expect(order2.issuer).is.eq(client2.address)
-		expect(order2.price).is.eq(px)
-		expect(order2.alive).is.true
+		const call = await call_from_order_id(order_id)
+		expect(await call.balanceOf(client1.address)).is.eq(qty)
 	})
 
 	it('Trigger full buy execution', async () => {
-		const qty_buy = q(100)
-		const qty_sell = q(200)
-		await client1_market.sell(book_address, qty_sell, p(2), max_gas)
+		const buy_qty = q(100)
+		const buy_px = p(3)
+		const buy_nominal = buy_qty.mul(buy_px)
+		const sell_qty = q(200)
+		const sell_px = p(2)
 
-		expect(await book.bid_size()).to.eq(1)
-		expect(await book.ask_size()).to.eq(0)
+		const gas_and_value = {
+			gasLimit: 6000000,
+			value: sell_qty
+		}
 
-		const [price, nb_entries] = await book.bid_entries(0)
-		expect(price).is.eq(p(2))
-		expect(nb_entries).is.eq(1)
+		await expect(client1_market.sell(book_address, sell_px, gas_and_value))
+			.to.emit(client1_market, 'CallEmission')
 
 		const order_id = await book.bid_order(0, 0)
+		const call = await call_from_order_id(order_id)
+		expect(await call.balanceOf(client1.address)).is.eq(sell_qty)
 
-		await expect(client2_market.buy(book_address, qty_buy, p(3), max_gas))
+		await mint_and_approve(client2, buy_nominal)
+		await expect(client2_market.buy(book_address, buy_qty, buy_px, max_gas))
 		 	.to.emit(book, 'Hit')
-		 	.withArgs(order_id, client2.address, client1.address, p(2), qty_buy)
+		 	.withArgs(order_id, client2.address, client1.address, sell_px, buy_qty, '0x0000000000000000000000000000000000000000')
 
-		expect(await book.bid_size()).to.eq(1)
-		expect(await book.ask_size()).to.eq(0)
+		const exec_nominal = sell_px.mul(buy_qty)
 
-		const order = await book.get_order(order_id)
-		expect(order.quantity).is.eq(qty_sell.sub(qty_buy))
-		expect(order.issuer).is.eq(client1.address)
-		expect(order.price).is.eq(p(2))
-		expect(order.alive).is.true
+		expect(await token.balanceOf(market.address)).is.eq(0)
+		expect(await token.balanceOf(client1.address)).is.eq(exec_nominal)
+		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal))
+		expect(await call.balanceOf(client1.address)).is.eq(sell_qty.sub(buy_qty))
+		expect(await call.balanceOf(client2.address)).is.eq(buy_qty)
 	})
 
 	it('Trigger partial buy execution', async () => {
-		const qty_sell = q(100)
-		const qty_buy = qty_sell.mul(3)
-		await client1_market.sell(book_address, qty_sell, p(2), max_gas)
-		await client1_market.sell(book_address, qty_sell, p(3), max_gas)
+		const sell_qty = q(100)
+		const buy_qty = sell_qty.mul(3)
 
-		expect(await book.bid_size()).to.eq(2)
-		expect(await book.ask_size()).to.eq(0)
+		const buy_px = p(3)
+		const buy_nominal = buy_qty.mul(buy_px)
+		const sell_px_1 = p(2)
+		const sell_px_2 = buy_px
 
-		const order1_id = await book.bid_order(0, 0)
-		const order2_id = await book.bid_order(1, 0)
+		const gas_and_value = {
+			gasLimit: 6000000,
+			value: sell_qty
+		}
 
-		await expect(client2_market.buy(book_address, qty_buy, p(3), max_gas))
-		 	.to.emit(book, 'Hit')
-		 	// .withArgs(order1_id, client2.address, client1.address, p(2), qty_sell)
-		 	// .to.emit(book, 'Hit')
-		 	// .withArgs(order2_id, client2.address, client1.address, p(3), qty_sell)
+		await expect(client1_market.sell(book_address, sell_px_1, gas_and_value))
+			.to.emit(client1_market, 'CallEmission')
 
-		expect(await book.bid_size()).to.eq(0)
-		expect(await book.ask_size()).to.eq(1)
+		await expect(client2_market.sell(book_address, sell_px_2, gas_and_value))
+			.to.emit(client1_market, 'CallEmission')
 
-		const buy_order_id = await book.ask_order(0, 0)
-		const order = await book.get_order(buy_order_id)
-		expect(order.quantity).is.eq(qty_buy.sub(qty_sell.mul(2)))
-		expect(order.issuer).is.eq(client2.address)
-		expect(order.price).is.eq(p(3))
-		expect(order.alive).is.true
+		const sell_order_id_1 = await book.bid_order(0, 0)
+		const call_1 = await call_from_order_id(sell_order_id_1)
+		expect(await call_1.balanceOf(client1.address)).is.eq(sell_qty)
+
+		const sell_order_id_2 = await book.bid_order(1, 0)
+		const call_2 = await call_from_order_id(sell_order_id_2)
+		expect(await call_2.balanceOf(client2.address)).is.eq(sell_qty)
+
+		await mint_and_approve(client3, buy_nominal)
+		await client3_market.buy(book_address, buy_qty, buy_px, max_gas)
+
+		const exec_1_nominal = sell_px_1.mul(sell_qty)
+		const exec_2_nominal = sell_px_2.mul(sell_qty)
+		const remaining_buy_nominal = buy_qty.sub(sell_qty).sub(sell_qty).mul(buy_px)
+
+		expect(await token.balanceOf(client1.address)).is.eq(exec_1_nominal)
+		expect(await token.balanceOf(client2.address)).is.eq(exec_2_nominal)
+		expect(await token.balanceOf(market.address)).is.eq(remaining_buy_nominal)
+		expect(await token.balanceOf(client3.address)).is.eq(
+			buy_nominal
+				.sub(exec_1_nominal)
+				.sub(exec_2_nominal)
+				.sub(remaining_buy_nominal))
+		expect(await call_1.balanceOf(client1.address)).is.eq(0)
+		expect(await call_1.balanceOf(client3.address)).is.eq(sell_qty)
+		expect(await call_2.balanceOf(client2.address)).is.eq(0)
+		expect(await call_2.balanceOf(client3.address)).is.eq(sell_qty)
 	})
 
 	it('Trigger full sell execution', async () => {
-		const qty_buy = q(200)
-		const qty_sell = q(100)
-		await client1_market.buy(book_address, qty_buy, p(3), max_gas)
+		const buy_qty = q(200)
+		const buy_px = p(3)
+		const buy_nominal = buy_qty.mul(buy_px)
+		const sell_qty = q(100)
+		const sell_px = p(2)
 
-		expect(await book.bid_size()).to.eq(0)
-		expect(await book.ask_size()).to.eq(1)
+		const gas_and_value = {
+			gasLimit: 6000000,
+			value: sell_qty
+		}
 
-		const [price, nb_entries] = await book.ask_entries(0)
-		expect(price).is.eq(p(-3))
-		expect(nb_entries).is.eq(1)
+		await client1_market.sell(book_address, sell_px, gas_and_value)
 
-		const order_id = await book.ask_order(0, 0)
+		const order_id = await book.bid_order(0, 0)
+		const call = await call_from_order_id(order_id)
+		expect(await call.balanceOf(client1.address)).is.eq(sell_qty)
 
-		await expect(client2_market.sell(book_address, qty_sell, p(2), max_gas))
-		 	.to.emit(book, 'Hit')
-		 	.withArgs(order_id, client1.address, client2.address, p(3), qty_sell)
+		await mint_and_approve(client2, buy_nominal)
+		await client2_market.buy(book_address, buy_qty, buy_px, max_gas)
 
-		expect(await book.bid_size()).to.eq(0)
-		expect(await book.ask_size()).to.eq(1)
+		const exec_nominal = sell_px.mul(sell_qty)
+		const remaining_buy_nominal = buy_qty.sub(sell_qty).mul(buy_px)
 
-		const order = await book.get_order(order_id)
-		expect(order.quantity).is.eq(qty_buy.sub(qty_sell))
-		expect(order.issuer).is.eq(client1.address)
-		expect(order.price).is.eq(p(3))
-		expect(order.alive).is.true
+		expect(await token.balanceOf(market.address)).is.eq(remaining_buy_nominal)
+		expect(await token.balanceOf(client1.address)).is.eq(exec_nominal)
+		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal).sub(remaining_buy_nominal))
+		expect(await call.balanceOf(client1.address)).is.eq(0)
+		expect(await call.balanceOf(client2.address)).is.eq(sell_qty)
 	})
 
-	it('Forbid cancellation', async () => {
-		const qty = q(100)
-		const px = p(3)
-		await expect(client1_market.buy(book_address, qty, px, max_gas))
-			.to.emit(book, 'BuyOrder')
-		expect(await book.ask_size()).to.eq(1)
-		const order_id = await book.ask_order(0, 0)
+	it('Trigger full secondary sell execution', async () => {
+		const buy_qty = q(100)
+		const buy_px = p(3)
+		const buy_nominal = buy_qty.mul(buy_px)
+		const sell_qty = buy_qty
+		const sell_px = p(2)
 
-		await expect(client2_market.cancel(book_address, order_id))
-			.to.be.reverted
+		const gas_and_value = {
+			gasLimit: 6000000,
+			value: sell_qty
+		}
+
+		await client1_market.sell(book_address, sell_px, gas_and_value)
+
+		const order_id = await book.bid_order(0, 0)
+		const call = await call_from_order_id(order_id)
+		expect(await call.balanceOf(client1.address)).is.eq(sell_qty)
+
+		await mint_and_approve(client2, buy_nominal)
+		await client2_market.buy(book_address, buy_qty, buy_px, max_gas)
+
+		const exec_nominal = sell_px.mul(sell_qty)
+
+		expect(await token.balanceOf(market.address)).is.eq(0)
+		expect(await token.balanceOf(client1.address)).is.eq(exec_nominal)
+		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal))
+		expect(await call.balanceOf(client1.address)).is.eq(0)
+		expect(await call.balanceOf(client2.address)).is.eq(sell_qty)
+
+		expect(await book.bid_size()).is.eq(1)
+		expect(await book.ask_size()).is.eq(0)
+
+		await client2_market.sell_secondary(book_address, sell_qty, sell_px, call.address, max_gas)
+
+		await mint_and_approve(client3, buy_nominal)
+		await client3_market.buy(book_address, buy_qty, buy_px, max_gas)
+
+		expect(await token.balanceOf(market.address)).is.eq(0)
+		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal)
+		expect(await token.balanceOf(client3.address)).is.eq(buy_nominal.sub(exec_nominal))
+		expect(await call.balanceOf(client2.address)).is.eq(0)
+		expect(await call.balanceOf(client3.address)).is.eq(sell_qty)
 	})
 
-	it('Cancel order', async () => {
-		const qty = q(100)
-		const px = p(3)
-		await expect(client1_market.buy(book_address, qty, px, max_gas))
-			.to.emit(book, 'BuyOrder')
-		expect(await book.ask_size()).to.eq(1)
-		const order_id = await book.ask_order(0, 0)
+	it('Trigger partial sell execution', async () => {
+		const buy_qty = q(100)
+		const sell_qty = buy_qty.mul(4)
 
-		await expect(client1_market.cancel(book_address, order_id))
-			.to.emit(book, "Cancelled")
-			.withArgs(order_id)
+		const buy_px_1 = p(2)
+		const buy_px_2 = p(3)
+		const buy_nominal_1 = buy_qty.mul(buy_px_1)
+		const buy_nominal_2 = buy_qty.mul(buy_px_2)
+		const sell_px= p(2)
 
-		const order = await book.get_order(order_id)
-		expect(order.alive).is.false
+		await mint_and_approve(client1, buy_nominal_1)
+		await client1_market.buy(book_address, buy_qty, buy_px_1, max_gas)
+
+		await mint_and_approve(client2, buy_nominal_2)
+		await client2_market.buy(book_address, buy_qty, buy_px_2, max_gas)
+
+		const gas_and_value = {
+			gasLimit: 6000000,
+			value: sell_qty
+		}
+
+		await client3_market.sell(book_address, sell_px, gas_and_value)
+
+		const sell_order_id = await book.bid_order(0, 0)
+		const call = await call_from_order_id(sell_order_id)
+
+		const exec_1_nominal = buy_px_1.mul(buy_qty)
+		const exec_2_nominal = buy_px_2.mul(buy_qty)
+		const remaining_sell_quantity = sell_qty.sub(buy_qty).sub(buy_qty)
+
+		expect(await token.balanceOf(client1.address)).is.eq(0)
+		expect(await token.balanceOf(client2.address)).is.eq(0)
+		expect(await token.balanceOf(market.address)).is.eq(0)
+		expect(await token.balanceOf(client3.address)).is.eq(exec_1_nominal.add(exec_2_nominal))
+		expect(await call.balanceOf(client1.address)).is.eq(buy_qty)
+		expect(await call.balanceOf(client2.address)).is.eq(buy_qty)
+		expect(await call.balanceOf(client3.address)).is.eq(remaining_sell_quantity)
 	})
 
-	it('Cancel order and no hit', async () => {
-		const qty = q(100)
-		const px = p(3)
-		await expect(client1_market.buy(book_address, qty, px, max_gas))
-			.to.emit(book, 'BuyOrder')
-		expect(await book.ask_size()).to.eq(1)
-		const order_id = await book.ask_order(0, 0)
+	it('Trigger partial secondary sell execution', async () => {
+		const buy_qty = q(100)
+		const buy_px = p(3)
+		const buy_nominal = buy_qty.mul(buy_px)
+		const sell_qty = buy_qty
+		const sell_px = p(2)
 
-		await client1_market.cancel(book_address, order_id)
+		const gas_and_value = {
+			gasLimit: 6000000,
+			value: sell_qty
+		}
 
-		const order = await book.get_order(order_id)
-		expect(order.alive).is.false
+		await client1_market.sell(book_address, sell_px, gas_and_value)
 
-		await expect(client2_market.sell(book_address, qty, px, max_gas))
-			.not.to.emit(book, 'Hit')
+		const order_id = await book.bid_order(0, 0)
+		const call = await call_from_order_id(order_id)
+		expect(await call.balanceOf(client1.address)).is.eq(sell_qty)
 
-		expect(await book.ask_size()).to.eq(0) // dead order has been removed
-		expect(await book.bid_size()).to.eq(1) // opposite order has been booked
+		await mint_and_approve(client2, buy_nominal)
+		await client2_market.buy(book_address, buy_qty, buy_px, max_gas)
+
+		const exec_nominal = sell_px.mul(sell_qty)
+
+		expect(await token.balanceOf(market.address)).is.eq(0)
+		expect(await token.balanceOf(client1.address)).is.eq(exec_nominal)
+		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal))
+		expect(await call.balanceOf(client1.address)).is.eq(0)
+		expect(await call.balanceOf(client2.address)).is.eq(sell_qty)
+
+		expect(await book.bid_size()).is.eq(1)
+		expect(await book.ask_size()).is.eq(0)
+
+		await client2_market.sell_secondary(book_address, sell_qty, sell_px, call.address, max_gas)
+
+		const second_buy_qty = q(50)
+		const second_buy_nominal = second_buy_qty.mul(buy_px)
+
+		await mint_and_approve(client3, second_buy_nominal)
+		await client3_market.buy(book_address, second_buy_qty, buy_px, max_gas)
+
+		const second_exec_nominal = sell_px.mul(second_buy_qty)
+
+		expect(await token.balanceOf(market.address)).is.eq(0)
+		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal).add(second_exec_nominal))
+		expect(await token.balanceOf(client3.address)).is.eq(second_buy_nominal.sub(second_exec_nominal))
+		expect(await call.balanceOf(client2.address)).is.eq(sell_qty.sub(second_buy_qty))
+		expect(await call.balanceOf(client3.address)).is.eq(second_buy_qty)
 	})
-	//*/
 })

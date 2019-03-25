@@ -122,7 +122,7 @@ describe('Book', function() {
 
 		await expect(client2_market.buy(book.address, qty_buy, p(3), max_gas))
 		 	.to.emit(book, 'Hit')
-		 	.withArgs(order_id, client2.address, client1.address, p(2), qty_buy)
+		 	.withArgs(order_id, client2.address, client1.address, p(2), qty_buy, '0x0000000000000000000000000000000000000000')
 
 		expect(await book.bid_size()).to.eq(1)
 		expect(await book.ask_size()).to.eq(0)
@@ -179,7 +179,7 @@ describe('Book', function() {
 
 		await expect(client2_market.sell(book.address, qty_sell, p(2), max_gas))
 		 	.to.emit(book, 'Hit')
-		 	.withArgs(order_id, client1.address, client2.address, p(3), qty_sell)
+		 	.withArgs(order_id, client1.address, client2.address, p(3), qty_sell, '0x0000000000000000000000000000000000000000')
 
 		expect(await book.bid_size()).to.eq(0)
 		expect(await book.ask_size()).to.eq(1)

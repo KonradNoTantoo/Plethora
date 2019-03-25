@@ -10,7 +10,7 @@ contract Book is IBook {
 	event SellOrder(bytes32 id);
 	event Expired(bytes32 id);
 	event Cancelled(bytes32 id);
-	event Hit(bytes32 hit_order, address buyer, address seller, uint price, uint quantity);
+	event Hit(bytes32 hit_order, address buyer, address seller, uint price, uint quantity, bytes20 user_data);
 
 	uint constant MAX_PRICE = ~(uint256(1) << 255);
 
@@ -117,7 +117,7 @@ contract Book is IBook {
 
 	function on_execution(bytes32 hit_order, Execution memory exec) internal {
 		_executions.push(exec);
-		emit Hit(hit_order, exec.buyer, exec.seller, exec.price, exec.quantity);
+		emit Hit(hit_order, exec.buyer, exec.seller, exec.price, exec.quantity, _parent.get_user_data());
 	}
 
 	function enter_order(Entry[] storage entries, int price, bytes32 order_id) internal {
