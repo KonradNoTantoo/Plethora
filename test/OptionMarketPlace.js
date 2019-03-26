@@ -15,7 +15,6 @@ const {expect} = chai
 
 
 function now() { return Math.floor(Date.now()/1000) }
-function offset_to_expiry( offset ) { return 1546351200 + offset }
 const SECONDS_IN_A_DAY = 60*60*24
 
 
@@ -64,18 +63,17 @@ describe('CallMarketPlace', function() {
 		client2_market = market.connect(client2)
 		client3_market = market.connect(client3)
 
-		const today_offset = Math.floor( await market.to_expiry_offset(now()) / SECONDS_IN_A_DAY )
-		const in_two_days_offset = (today_offset + 2)*SECONDS_IN_A_DAY
+		const in_two_days = now() + 2*SECONDS_IN_A_DAY
 
 		const gas_and_value = {
 			gasLimit: 6000000,
 			value: ethers.utils.parseEther('0.001')
 		}
 
-		await expect(market.open_book(in_two_days_offset, strike, minimum_quantity, tick_size, max_order_lifetime, gas_and_value))
+		await expect(market.open_book(in_two_days, strike, minimum_quantity, tick_size, max_order_lifetime, gas_and_value))
 			.to.emit(market, "BookOpened")
 
-		book_address = await market.get_book_address( offset_to_expiry((today_offset + 2)*SECONDS_IN_A_DAY), strike )
+		book_address = await market.get_book_address( in_two_days, strike )
 		expect(book_address).is.not.eq(0)
 		book = new ethers.Contract(book_address, Book.abi, admin)
 	})
@@ -432,18 +430,17 @@ describe('PutMarketPlace', function() {
 		client2_market = market.connect(client2)
 		client3_market = market.connect(client3)
 
-		const today_offset = Math.floor( await market.to_expiry_offset(now()) / SECONDS_IN_A_DAY )
-		const in_two_days_offset = (today_offset + 2)*SECONDS_IN_A_DAY
+		const in_two_days = now() + 2*SECONDS_IN_A_DAY
 
 		const gas_and_value = {
 			gasLimit: 6000000,
 			value: ethers.utils.parseEther('0.001')
 		}
 
-		await expect(market.open_book(in_two_days_offset, strike, minimum_quantity, tick_size, max_order_lifetime, gas_and_value))
+		await expect(market.open_book(in_two_days, strike, minimum_quantity, tick_size, max_order_lifetime, gas_and_value))
 			.to.emit(market, "BookOpened")
 
-		book_address = await market.get_book_address( offset_to_expiry((today_offset + 2)*SECONDS_IN_A_DAY), strike )
+		book_address = await market.get_book_address( in_two_days, strike )
 		expect(book_address).is.not.eq(0)
 		book = new ethers.Contract(book_address, Book.abi, admin)
 	})

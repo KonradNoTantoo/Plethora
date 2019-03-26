@@ -7,26 +7,13 @@ import "Interfaces.sol";
 
 
 contract OptionMarketPlace is IMarketPlace {
-	enum OptionType { CALL, PUT }
-	event BookOpened(address book_address, OptionType option_type, uint expiry, uint strike);
+	event BookOpened(address book_address, uint expiry, uint strike);
 	event BookClosed(address book_address);
 
-	uint constant EXPIRY_ORIGIN_TIME = 1546351200; // January 1st 2019, 14:00
 	uint constant MINIMUM_TRADING_TIME = 1 days;
 	uint constant MINIMUM_ORDER_LIFETIME = 1 days;
 	uint constant BOOK_OPENING_FEE = 1 finney;
 	uint constant BOOK_CLOSE_DELAY = 100 days;
-
-	function to_expiry_offset(uint expiry_timestamp) external pure returns(uint offset) {
-		require(expiry_timestamp > EXPIRY_ORIGIN_TIME);
-		return expiry_timestamp - EXPIRY_ORIGIN_TIME;
-	}
-
-	function require_valid_expiry_offset(uint offset) public view returns(uint expiry_timestamp) {
-		uint expiry = offset + EXPIRY_ORIGIN_TIME;
-		require(expiry >= (now + MINIMUM_TRADING_TIME) && (offset % 1 days) == 0);
-		return expiry;
-	}
 
 	IERC20 public _pricing_token_vault;
 	IBookFactory public _book_factory; 
@@ -42,6 +29,7 @@ contract OptionMarketPlace is IMarketPlace {
 	// expiry => strike => IBook
 	mapping(uint => mapping(uint => IBook)) public _books;
 	mapping(address => BookData) public _book_data;
+	address[] _book_addresses;
 
 	constructor(address pricing_token_vault, address book_factory) public {
 		_pricing_token_vault = IERC20(pricing_token_vault);
@@ -50,6 +38,10 @@ contract OptionMarketPlace is IMarketPlace {
 
 	function get_book_address(uint expiry, uint strike_per_nominal_unit) external view returns(address book) {
 		return address(_books[expiry][strike_per_nominal_unit]);
+	}
+
+	function nb_books() external view returns(uint number) {
+		return _book_addresses.length;
 	}
 
 	modifier reset_order_state() {
@@ -135,18 +127,15 @@ contract OptionMarketPlace is IMarketPlace {
 		return bytes20(_current_option_contract);
 	}
 
-	function emit_book_opened(address book_address, uint expiry, uint strike) internal;
-
 	function open_book(
-			uint expiry_offset
+			uint expiry
 		,	uint strike_per_nominal_unit
 		,	uint minimum_order_quantity
 		,	uint price_tick_size
 		,	uint max_order_lifetime
 	) external payable {
-		uint expiry = require_valid_expiry_offset(expiry_offset);
-		
 		require(address(0) == address(_books[expiry][strike_per_nominal_unit])
+			&&	expiry >= (now + MINIMUM_TRADING_TIME)
 			&&	strike_per_nominal_unit > 0
 			&&	max_order_lifetime >= MINIMUM_ORDER_LIFETIME
 			&&	msg.value == BOOK_OPENING_FEE
@@ -154,14 +143,16 @@ contract OptionMarketPlace is IMarketPlace {
 
 		IBook book = _book_factory.create(minimum_order_quantity, price_tick_size, max_order_lifetime);
 		_books[expiry][strike_per_nominal_unit] = book;
-		BookData storage data = _book_data[address(book)];
+		address book_address = address(book);
+		BookData storage data = _book_data[book_address];
 		data.strike_per_nominal_unit = strike_per_nominal_unit;
 		data.expiry = expiry;
-		emit_book_opened(address(book), expiry, strike_per_nominal_unit);
+		_book_addresses.push(book_address);
+		emit BookOpened(book_address, expiry, strike_per_nominal_unit);
 	}
 
-	function roll_book(address book_address, uint expiry_offset) external {
-		uint expiry = require_valid_expiry_offset(expiry_offset);
+	function roll_book(address book_address, uint expiry) external {
+		require(expiry >= (now + MINIMUM_TRADING_TIME));
 		BookData storage data = _book_data[book_address];
 		IBook book = _books[data.expiry][data.strike_per_nominal_unit];
 		
@@ -173,7 +164,7 @@ contract OptionMarketPlace is IMarketPlace {
 		_books[expiry][data.strike_per_nominal_unit] = book;
 		book.clear();
 		
-		emit_book_opened(book_address, expiry, data.strike_per_nominal_unit);
+		emit BookOpened(book_address, expiry, data.strike_per_nominal_unit);
 	}
 
 	function close_book(address book_address) external {
@@ -232,10 +223,6 @@ contract CallMarketPlace is OptionMarketPlace {
 			,	quantity
 			,	price);
 	}
-
-	function emit_book_opened(address book_address, uint expiry, uint strike) internal {
-		emit BookOpened(book_address, OptionType.CALL, expiry, strike);
-	}
 }
 
 
@@ -281,9 +268,5 @@ contract PutMarketPlace is OptionMarketPlace {
 			,	option_contract
 			,	quantity
 			,	price);
-	}
-
-	function emit_book_opened(address book_address, uint expiry, uint strike) internal {
-		emit BookOpened(book_address, OptionType.PUT, expiry, strike);
 	}
 }
