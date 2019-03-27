@@ -29,7 +29,7 @@ contract OptionMarketPlace is IMarketPlace {
 	// expiry => strike => IBook
 	mapping(uint => mapping(uint => IBook)) public _books;
 	mapping(address => BookData) public _book_data;
-	address[] _book_addresses;
+	address[] public _book_addresses;
 
 	constructor(address pricing_token_vault, address book_factory) public {
 		_pricing_token_vault = IERC20(pricing_token_vault);
