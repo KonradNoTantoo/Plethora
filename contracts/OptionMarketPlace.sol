@@ -3,7 +3,6 @@ pragma experimental ABIEncoderV2;
 
 
 import "CoveredOption.sol";
-import "Interfaces.sol";
 
 
 contract OptionMarketPlace is IMarketPlace {
@@ -21,7 +20,7 @@ contract OptionMarketPlace is IMarketPlace {
 	address private _current_option_contract;
 
 	struct BookData {
-		uint strike_per_nominal_unit;
+		uint strike_per_underlying_unit;
 		uint expiry;
 	}
 
@@ -36,8 +35,8 @@ contract OptionMarketPlace is IMarketPlace {
 		_book_factory = IBookFactory(book_factory);
 	}
 
-	function get_book_address(uint expiry, uint strike_per_nominal_unit) external view returns(address book) {
-		return address(_books[expiry][strike_per_nominal_unit]);
+	function get_book_address(uint expiry, uint strike_per_underlying_unit) external view returns(address book) {
+		return address(_books[expiry][strike_per_underlying_unit]);
 	}
 
 	function nb_books() external view returns(uint number) {
@@ -60,9 +59,11 @@ contract OptionMarketPlace is IMarketPlace {
 
 		if ( result.status == IBook.Status.PARTIAL_EXEC )
 		{
-			_pricing_token_vault.transferFrom(msg.sender, address(this), result.order.quantity * result.order.price);
+			_pricing_token_vault.transferFrom(msg.sender, address(this),
+				PriceLib.nominal_value(result.order.quantity, result.order.price));
 		} else if ( result.status == IBook.Status.BOOKED ) {
-			_pricing_token_vault.transferFrom(msg.sender, address(this), quantity * price);
+			_pricing_token_vault.transferFrom(msg.sender, address(this),
+				PriceLib.nominal_value(quantity, price));
 		}
 
 		return result.status;
@@ -83,7 +84,8 @@ contract OptionMarketPlace is IMarketPlace {
 		}
 		else
 		{
-			_pricing_token_vault.transfer(order.issuer, order.quantity*order.price);
+			_pricing_token_vault.transfer(order.issuer,
+				PriceLib.nominal_value(order.quantity, order.price));
 		}
 	}
 
@@ -102,7 +104,8 @@ contract OptionMarketPlace is IMarketPlace {
 		IBook.Execution memory execution = book.last_execution();
 		address option_address = address(hit_order_user_data);
 		SmartOptionEthVsERC20(option_address).transferLocked(execution.seller, execution.buyer, execution.quantity);
-		_pricing_token_vault.transferFrom(execution.buyer, execution.seller, execution.price * execution.quantity);
+		_pricing_token_vault.transferFrom(execution.buyer, execution.seller,
+			PriceLib.nominal_value(execution.quantity, execution.price));
 	}
 
 	function on_sell_execution(bytes20 hit_order_user_data) external {
@@ -114,7 +117,8 @@ contract OptionMarketPlace is IMarketPlace {
 		IBook.Execution memory execution = book.last_execution();
 		address option_address = _current_option_contract;
 		SmartOptionEthVsERC20(option_address).transferLocked(execution.seller, execution.buyer, execution.quantity);
-		_pricing_token_vault.transfer(execution.seller, execution.price * execution.quantity);
+		_pricing_token_vault.transfer(execution.seller,
+			PriceLib.nominal_value(execution.quantity, execution.price));
 	}
 
 	function on_expired(IBook.Order calldata order) external {
@@ -129,42 +133,42 @@ contract OptionMarketPlace is IMarketPlace {
 
 	function open_book(
 			uint expiry
-		,	uint strike_per_nominal_unit
+		,	uint strike_per_underlying_unit
 		,	uint minimum_order_quantity
 		,	uint price_tick_size
 		,	uint max_order_lifetime
 	) external payable {
-		require(address(0) == address(_books[expiry][strike_per_nominal_unit])
+		require(address(0) == address(_books[expiry][strike_per_underlying_unit])
 			&&	expiry >= (now + MINIMUM_TRADING_TIME)
-			&&	strike_per_nominal_unit > 0
+			&&	strike_per_underlying_unit > 0
 			&&	max_order_lifetime >= MINIMUM_ORDER_LIFETIME
 			&&	msg.value == BOOK_OPENING_FEE
 			);
 
 		IBook book = _book_factory.create(minimum_order_quantity, price_tick_size, max_order_lifetime);
-		_books[expiry][strike_per_nominal_unit] = book;
+		_books[expiry][strike_per_underlying_unit] = book;
 		address book_address = address(book);
 		BookData storage data = _book_data[book_address];
-		data.strike_per_nominal_unit = strike_per_nominal_unit;
+		data.strike_per_underlying_unit = strike_per_underlying_unit;
 		data.expiry = expiry;
 		_book_addresses.push(book_address);
-		emit BookOpened(book_address, expiry, strike_per_nominal_unit);
+		emit BookOpened(book_address, expiry, strike_per_underlying_unit);
 	}
 
 	function roll_book(address book_address, uint expiry) external {
 		require(expiry >= (now + MINIMUM_TRADING_TIME));
 		BookData storage data = _book_data[book_address];
-		IBook book = _books[data.expiry][data.strike_per_nominal_unit];
+		IBook book = _books[data.expiry][data.strike_per_underlying_unit];
 		
 		require(data.expiry < now
 			&&	book_address == address(book)
-			&&	address(0) == address(_books[expiry][data.strike_per_nominal_unit]));
+			&&	address(0) == address(_books[expiry][data.strike_per_underlying_unit]));
 		
-		delete _books[data.expiry][data.strike_per_nominal_unit];
-		_books[expiry][data.strike_per_nominal_unit] = book;
+		delete _books[data.expiry][data.strike_per_underlying_unit];
+		_books[expiry][data.strike_per_underlying_unit] = book;
 		book.clear();
 		
-		emit BookOpened(book_address, expiry, data.strike_per_nominal_unit);
+		emit BookOpened(book_address, expiry, data.strike_per_underlying_unit);
 	}
 
 	function close_book(address book_address) external {
@@ -172,8 +176,8 @@ contract OptionMarketPlace is IMarketPlace {
 		
 		require(data.expiry + BOOK_CLOSE_DELAY < now && data.expiry != 0);
 
-        IBook book = _books[data.expiry][data.strike_per_nominal_unit];
-		delete _books[data.expiry][data.strike_per_nominal_unit];
+        IBook book = _books[data.expiry][data.strike_per_underlying_unit];
+		delete _books[data.expiry][data.strike_per_underlying_unit];
 		delete _book_data[book_address];
 		book.clear();
 
@@ -194,7 +198,7 @@ contract CallMarketPlace is OptionMarketPlace {
 		require(data.expiry > now);
 		SmartOptionEthVsERC20 option = (new CoveredEthCall).value(msg.value)(
 				_pricing_token_vault
-			,	data.strike_per_nominal_unit
+			,	data.strike_per_underlying_unit
 			,	data.expiry
 			,	msg.sender
 			,	msg.sender
@@ -213,7 +217,7 @@ contract CallMarketPlace is OptionMarketPlace {
 		BookData memory data = _book_data[book_address];
 		require(data.expiry > now
 			&&	data.expiry == option_contract._expiry()
-			&&	data.strike_per_nominal_unit == option_contract._strike_per_nominal_unit()
+			&&	data.strike_per_underlying_unit == option_contract._strike_per_underlying_unit()
 			&&	address(this) == option_contract._issuer()
 			&&	option_contract.balanceOf(msg.sender) >= quantity
 			);
@@ -238,12 +242,13 @@ contract PutMarketPlace is OptionMarketPlace {
 		CoveredEthPut option = new CoveredEthPut(
 				_pricing_token_vault
 			,	quantity
-			,	data.strike_per_nominal_unit
+			,	data.strike_per_underlying_unit
 			,	data.expiry
 			,	msg.sender
 			,	msg.sender
 			);
-		_pricing_token_vault.transferFrom(msg.sender, address(option), quantity*data.strike_per_nominal_unit);
+		_pricing_token_vault.transferFrom(msg.sender, address(option),
+			PriceLib.nominal_value(quantity, data.strike_per_underlying_unit));
 		option.activate();
 		_options.push(option);
 		emit PutEmission(msg.sender, address(option));
@@ -259,7 +264,7 @@ contract PutMarketPlace is OptionMarketPlace {
 		BookData memory data = _book_data[book_address];
 		require(option_contract.getStatus() == SmartOptionEthVsERC20.Status.RUNNING
 			&&	data.expiry == option_contract._expiry()
-			&&	data.strike_per_nominal_unit == option_contract._strike_per_nominal_unit()
+			&&	data.strike_per_underlying_unit == option_contract._strike_per_underlying_unit()
 			&&	address(this) == option_contract._issuer()
 			&&	option_contract.balanceOf(msg.sender) >= quantity
 			);

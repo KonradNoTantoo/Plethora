@@ -2,7 +2,7 @@ pragma solidity ^0.5.5;
 pragma experimental ABIEncoderV2;
 
 
-import "Interfaces.sol";
+import "Common.sol";
 
 
 contract MockMarketPlace is IMarketPlace {

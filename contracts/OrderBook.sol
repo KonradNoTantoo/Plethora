@@ -2,7 +2,7 @@ pragma solidity ^0.5.5;
 pragma experimental ABIEncoderV2;
 
 
-import "Interfaces.sol";
+import "Common.sol";
 
 
 contract Book is IBook {
@@ -11,8 +11,6 @@ contract Book is IBook {
 	event Expired(bytes32 id);
 	event Cancelled(bytes32 id);
 	event Hit(bytes32 hit_order, address buyer, address seller, uint price, uint quantity, bytes20 user_data);
-
-	uint constant MAX_PRICE = ~(uint256(1) << 255);
 
 	struct Entry {
 		int signed_price;
@@ -90,12 +88,9 @@ contract Book is IBook {
 	}
 
 	function is_order_legal(uint quantity, uint price) public view returns(bool legal) {
-		uint order_nominal = quantity * price;
 		return quantity >= _minimum_order_quantity
-			&& price % _price_tick_size == 0
-			&& order_nominal >= quantity
-			&& order_nominal >= price
-			&& price <= MAX_PRICE;
+			&& PriceLib.is_valid_nominal(quantity, price)
+			&& price % _price_tick_size == 0;
 	}
 
 	function compute_order_id(Order memory order) public pure returns (bytes32 id) {

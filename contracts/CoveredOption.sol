@@ -1,7 +1,7 @@
 pragma solidity ^0.5.5;
 
 import 'IERC20.sol';
-
+import 'Common.sol';
 
 
 contract SmartOptionEthVsERC20 is IERC20 {
@@ -16,8 +16,8 @@ contract SmartOptionEthVsERC20 is IERC20 {
 
 	IERC20 _erc20_minter;
 
-	uint public _nominal;
-	uint public _strike_per_nominal_unit;
+	uint public _underlying_quantity;
+	uint public _strike_per_underlying_unit;
 	uint public _expiry;
 
 	mapping(address => mapping (address => uint256)) private _allowed;
@@ -27,39 +27,36 @@ contract SmartOptionEthVsERC20 is IERC20 {
 
 	constructor(
 			IERC20 erc20_minter
-		,	uint nominal
-		,	uint strike_per_nominal_unit
+		,	uint underlying_quantity
+		,	uint strike_per_underlying_unit
 		,	uint expiry
 		,	address buyer
 		,	address payable writer
 	) public {
-		uint test_overflow = nominal * strike_per_nominal_unit;
 		require(
 				address(0) != address(erc20_minter)
 			&&	address(0) != buyer
 			&&	address(0) != writer
-			&&	nominal > 0
-			&&	strike_per_nominal_unit > 0
+			&&	underlying_quantity > 0
 			&&	expiry > now
-			&&	test_overflow >= nominal
-			&&	test_overflow >= strike_per_nominal_unit
+			&&	PriceLib.is_valid_nominal(underlying_quantity, strike_per_underlying_unit)
 			);
 
 		_erc20_minter = erc20_minter;
 
-		_nominal = nominal;
-		_strike_per_nominal_unit = strike_per_nominal_unit;		
+		_underlying_quantity = underlying_quantity;
+		_strike_per_underlying_unit = strike_per_underlying_unit;		
 		_expiry = expiry;
 		_issuer = msg.sender;
 
-		_nominal_shares[buyer] = _nominal;
+		_nominal_shares[buyer] = _underlying_quantity;
 		_writer = writer;
 
 		_status = Status.WAITING;
 	}
 
-	function strike() external view returns(uint) {
-		return _nominal * _strike_per_nominal_unit;
+	function strike() public view returns(uint) {
+		return PriceLib.nominal_value(_underlying_quantity, _strike_per_underlying_unit);
 	}
 
 	function isExpired() public view returns(bool expired) {
@@ -108,7 +105,7 @@ contract SmartOptionEthVsERC20 is IERC20 {
 	* @dev Total number of tokens in existence
 	*/
 	function totalSupply() public view returns (uint256) {
-		return _nominal;
+		return _underlying_quantity;
 	}
 
 	/**
@@ -210,8 +207,8 @@ contract SmartOptionEthVsERC20 is IERC20 {
 
 
 contract CoveredEthCall is SmartOptionEthVsERC20 {
-	constructor(IERC20 erc20_minter, uint strike_per_nominal_unit, uint expiry, address buyer, address payable writer) public payable
-		SmartOptionEthVsERC20(erc20_minter, msg.value, strike_per_nominal_unit, expiry, buyer, writer)
+	constructor(IERC20 erc20_minter, uint strike_per_underlying_unit, uint expiry, address buyer, address payable writer) public payable
+		SmartOptionEthVsERC20(erc20_minter, msg.value, strike_per_underlying_unit, expiry, buyer, writer)
 	{
 		_status = Status.RUNNING;
 	}
@@ -224,7 +221,7 @@ contract CoveredEthCall is SmartOptionEthVsERC20 {
 			&&	isExpired()
 			&&	quantity > 0
 			&&	quantity <= shares
-			&&	_erc20_minter.transferFrom(buyer, address(this), _strike_per_nominal_unit * quantity)
+			&&	_erc20_minter.transferFrom(buyer, address(this), PriceLib.nominal_value(quantity, _strike_per_underlying_unit))
 			);
 		buyer.transfer(quantity);
 	}
@@ -237,12 +234,12 @@ contract CoveredEthCall is SmartOptionEthVsERC20 {
 
 
 contract CoveredEthPut is SmartOptionEthVsERC20 {
-	constructor(IERC20 erc20_minter, uint nominal, uint strike_per_nominal_unit, uint expiry, address buyer, address payable writer) public
-		SmartOptionEthVsERC20(erc20_minter, nominal, strike_per_nominal_unit, expiry, buyer, writer) {}
+	constructor(IERC20 erc20_minter, uint underlying_quantity, uint strike_per_underlying_unit, uint expiry, address buyer, address payable writer) public
+		SmartOptionEthVsERC20(erc20_minter, underlying_quantity, strike_per_underlying_unit, expiry, buyer, writer) {}
 
 	function activate() external {
 		require(_status == Status.WAITING
-			&&	_erc20_minter.balanceOf(address(this)) == _strike_per_nominal_unit * _nominal
+			&&	_erc20_minter.balanceOf(address(this)) == strike()
 			);
 		_status = Status.RUNNING;
 	}
@@ -255,7 +252,7 @@ contract CoveredEthPut is SmartOptionEthVsERC20 {
 			&&	isExpired()
 			&&	msg.value > 0
 			&&	msg.value <= shares
-		 	&&	_erc20_minter.transfer(buyer, _strike_per_nominal_unit * msg.value)
+		 	&&	_erc20_minter.transfer(buyer, PriceLib.nominal_value(msg.value, _strike_per_underlying_unit))
 		 	);
 	}
 

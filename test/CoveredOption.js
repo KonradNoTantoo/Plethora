@@ -13,6 +13,8 @@ const {expect} = chai
 function now() { return Math.floor(Date.now()/1000) }
 function next_minute() { return now() + 60 }
 function in_one_second() { return now() + 1 }
+const PRICE_ADJUSTMENT = 2**8
+function adjust_price(p) { return Math.floor(p*PRICE_ADJUSTMENT) }
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -27,8 +29,8 @@ describe('CoveredEthCall', function() {
 	let token
 	let call
 	const underlying_nominal = ethers.utils.parseEther('1.0')
-	const strike = 100
-	const nb_tokens = underlying_nominal.mul(strike)
+	const strike = 100.1
+	const nb_tokens = underlying_nominal.mul(adjust_price(strike)).div(PRICE_ADJUSTMENT)
 
 	beforeEach(async () => {
 		token = await deployContract(admin, Plethora, [])
@@ -39,7 +41,7 @@ describe('CoveredEthCall', function() {
 			value: underlying_nominal
 		}
 
-		call = await deployContract(admin, CoveredEthCall, [token.address, strike, in_one_second(), client1.address, writer1.address], override)
+		call = await deployContract(admin, CoveredEthCall, [token.address, adjust_price(strike), in_one_second(), client1.address, writer1.address], override)
 	})
 
 	it('Bad constructors', async () => {
@@ -49,16 +51,16 @@ describe('CoveredEthCall', function() {
 
 		await expect(deployContract(admin, CoveredEthCall, [token.address, 0, next_minute(), client1.address, writer1.address], override))
 			.to.be.reverted
-		await expect(deployContract(admin, CoveredEthCall, [token.address, strike, now() - 60, client1.address, writer1.address], override))
+		await expect(deployContract(admin, CoveredEthCall, [token.address, adjust_price(strike), now() - 60, client1.address, writer1.address], override))
 			.to.be.reverted
-		await expect(deployContract(admin, CoveredEthCall, [token.address, strike, next_minute(), client1.address, writer1.address]))
+		await expect(deployContract(admin, CoveredEthCall, [token.address, adjust_price(strike), next_minute(), client1.address, writer1.address]))
 			.to.be.reverted
 	})
 
 	it('Initial balance', async () => {
 		expect(await call.balanceOf(client1.address)).to.eq(underlying_nominal)
 		expect(await call.balanceOf(writer1.address)).to.eq(0)
-		expect(await call._strike_per_nominal_unit()).to.eq(strike)
+		expect(await call._strike_per_underlying_unit()).to.eq(adjust_price(strike))
 		expect(await token.balanceOf(client1.address)).to.eq(nb_tokens)
 	})
 
@@ -125,8 +127,8 @@ describe('CoveredEthPut', function() {
 	let token
 	let put
 	const underlying_nominal = ethers.utils.parseEther('1.0')
-	const strike = 100
-	const nb_tokens = underlying_nominal.mul(strike)
+	const strike = 100.2
+	const nb_tokens = underlying_nominal.mul(adjust_price(strike)).div(PRICE_ADJUSTMENT)
 
 	beforeEach(async () => {
 		token = await deployContract(admin, Plethora, [])
@@ -136,7 +138,7 @@ describe('CoveredEthPut', function() {
 			gasLimit: 5000000
 		}
 
-		put = await deployContract(admin, CoveredEthPut, [token.address, underlying_nominal, strike, in_one_second(), client1.address, writer1.address], override)
+		put = await deployContract(admin, CoveredEthPut, [token.address, underlying_nominal, adjust_price(strike), in_one_second(), client1.address, writer1.address], override)
 
 		const tokenFromWriter1 = token.connect(writer1)
 		await tokenFromWriter1.transfer(put.address, nb_tokens)
@@ -146,16 +148,16 @@ describe('CoveredEthPut', function() {
 	it('Bad constructors', async () => {
 		await expect(deployContract(admin, CoveredEthPut, [token.address, underlying_nominal, 0, next_minute(), client1.address, writer1.address]))
 			.to.be.reverted
-		await expect(deployContract(admin, CoveredEthPut, [token.address, underlying_nominal, strike, now() - 60, client1.address, writer1.address]))
+		await expect(deployContract(admin, CoveredEthPut, [token.address, underlying_nominal, adjust_price(strike), now() - 60, client1.address, writer1.address]))
 			.to.be.reverted
-		await expect(deployContract(admin, CoveredEthPut, [token.address, 0, strike, next_minute(), client1.address, writer1.address]))
+		await expect(deployContract(admin, CoveredEthPut, [token.address, 0, adjust_price(strike), next_minute(), client1.address, writer1.address]))
 			.to.be.reverted
 	})
 
 	it('Initial balance', async () => {
 		expect(await put.balanceOf(client1.address)).to.eq(underlying_nominal)
 		expect(await put.balanceOf(writer1.address)).to.eq(0)
-		expect(await put._strike_per_nominal_unit()).to.eq(strike)
+		expect(await put._strike_per_underlying_unit()).to.eq(adjust_price(strike))
 		expect(await token.balanceOf(writer1.address)).to.eq(0)
 		expect(await token.balanceOf(put.address)).to.eq(nb_tokens)
 	})
