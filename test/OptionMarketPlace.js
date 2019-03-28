@@ -16,7 +16,7 @@ const {expect} = chai
 
 function now() { return Math.floor(Date.now()/1000) }
 const SECONDS_IN_A_DAY = 60*60*24
-const PRICE_ADJUSTMENT = 2**8
+const PRICE_ADJUSTMENT = 2**16
 function adjust_price(p) { return Math.floor(p*PRICE_ADJUSTMENT) }
 function nominal_value(q, p) { return q.mul(p).div(PRICE_ADJUSTMENT) }
 
