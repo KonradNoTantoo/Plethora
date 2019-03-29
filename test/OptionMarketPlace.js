@@ -183,13 +183,13 @@ describe('CallMarketPlace', function() {
 		await expect(client2_market.sell(book_address, sell_px_2, gas_and_value))
 			.to.emit(market, 'CallEmission')
 
-		const sell_order_id_1 = await book.bid_order(0, 0)
-		const call_1 = await call_from_order_id(sell_order_id_1)
-		expect(await call_1.balanceOf(client1.address)).is.eq(sell_qty)
-
-		const sell_order_id_2 = await book.bid_order(1, 0)
+		const sell_order_id_2 = await book.bid_order(0, 0)
 		const call_2 = await call_from_order_id(sell_order_id_2)
 		expect(await call_2.balanceOf(client2.address)).is.eq(sell_qty)
+
+		const sell_order_id_1 = await book.bid_order(1, 0)
+		const call_1 = await call_from_order_id(sell_order_id_1)
+		expect(await call_1.balanceOf(client1.address)).is.eq(sell_qty)
 
 		await mint_and_approve(client3, buy_nominal)
 		await client3_market.buy(book_address, buy_qty, buy_px, max_gas)
@@ -543,13 +543,13 @@ describe('PutMarketPlace', function() {
 		await expect(client2_market.sell(book_address, sell_qty, sell_px_2, max_gas))
 			.to.emit(market, 'PutEmission')
 
-		const sell_order_id_1 = await book.bid_order(0, 0)
-		const put_1 = await put_from_order_id(sell_order_id_1)
-		expect(await put_1.balanceOf(client1.address)).is.eq(sell_qty)
-
-		const sell_order_id_2 = await book.bid_order(1, 0)
+		const sell_order_id_2 = await book.bid_order(0, 0)
 		const put_2 = await put_from_order_id(sell_order_id_2)
 		expect(await put_2.balanceOf(client2.address)).is.eq(sell_qty)
+
+		const sell_order_id_1 = await book.bid_order(1, 0)
+		const put_1 = await put_from_order_id(sell_order_id_1)
+		expect(await put_1.balanceOf(client1.address)).is.eq(sell_qty)
 
 		await mint_and_approve(client3, buy_nominal)
 		await client3_market.buy(book_address, buy_qty, buy_px, max_gas)
