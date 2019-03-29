@@ -13,7 +13,7 @@ const {expect} = chai
 function now() { return Math.floor(Date.now()/1000) }
 function next_minute() { return now() + 60 }
 function in_one_second() { return now() + 1 }
-const PRICE_ADJUSTMENT = 2**16
+const PRICE_ADJUSTMENT = 2**3
 function adjust_price(p) { return Math.floor(p*PRICE_ADJUSTMENT) }
 
 function sleep(ms) {

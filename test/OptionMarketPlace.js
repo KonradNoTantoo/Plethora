@@ -16,7 +16,7 @@ const {expect} = chai
 
 function now() { return Math.floor(Date.now()/1000) }
 const SECONDS_IN_A_DAY = 60*60*24
-const PRICE_ADJUSTMENT = 2**16
+const PRICE_ADJUSTMENT = 2**3
 function adjust_price(p) { return Math.floor(p*PRICE_ADJUSTMENT) }
 function nominal_value(q, p) { return q.mul(p).div(PRICE_ADJUSTMENT) }
 
@@ -35,7 +35,7 @@ describe('CallMarketPlace', function() {
 	let book
 	let book_address
 	const minimum_quantity = ethers.utils.parseEther('0.01')
-	const tick_size = ethers.utils.bigNumberify(adjust_price(0.004))
+	const tick_size = ethers.utils.bigNumberify(adjust_price(0.125))
 	const max_order_lifetime = SECONDS_IN_A_DAY
 	const max_gas = { gasLimit: 6000000 }
 	const strike = 100.3
@@ -391,7 +391,7 @@ describe('PutMarketPlace', function() {
 	let book
 	let book_address
 	const minimum_quantity = ethers.utils.parseEther('0.01')
-	const tick_size = ethers.utils.bigNumberify(adjust_price(0.004))
+	const tick_size = ethers.utils.bigNumberify(adjust_price(0.125))
 	const max_order_lifetime = SECONDS_IN_A_DAY
 	const max_gas = { gasLimit: 6000000 }
 	const strike = 100.4

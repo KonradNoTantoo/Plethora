@@ -3,7 +3,7 @@ pragma experimental ABIEncoderV2;
 
 
 library PriceLib {
-	uint constant PRICE_ADJUSTMENT = 16;
+	uint constant PRICE_ADJUSTMENT = 3;
 
 	function nominal_value(uint quantity, uint price) internal pure returns(uint nominal) {
 		return (quantity*price) >> PRICE_ADJUSTMENT;
