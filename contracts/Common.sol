@@ -45,14 +45,15 @@ interface IBook {
 
 	function get_order(bytes32 order_id) external view returns(Order memory gotten);
 
-	function sell(address issuer, uint quantity, uint price) external returns(Result memory result);
+	function sell(address issuer, uint quantity, uint price, bytes20 user_data) external returns(Result memory result);
 
-	function buy(address issuer, uint quantity, uint price) external returns(Result memory result);
+	function buy(address issuer, uint quantity, uint price, bytes20 user_data) external returns(Result memory result);
 
 	function cancel(address issuer, bytes32 order_id) external returns(Order memory order);
 
 	function clear() external;
 }
+
 
 interface IBookFactory {
 	function create(
@@ -64,8 +65,7 @@ interface IBookFactory {
 
 
 interface IMarketPlace {
-	function on_buy_execution(bytes20 user_data) external;
-	function on_sell_execution(bytes20 user_data) external;
+	function on_buy_execution(bytes20 hit_user_data, bytes20 order_user_data, IBook.Execution calldata execution) external;
+	function on_sell_execution(bytes20 hit_user_data, bytes20 order_user_data, IBook.Execution calldata execution) external;
 	function on_expired(IBook.Order calldata order) external;
-	function get_user_data() external returns(bytes20 user_data);
 }

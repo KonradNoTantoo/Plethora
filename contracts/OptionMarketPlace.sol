@@ -17,7 +17,6 @@ contract OptionMarketPlace is IMarketPlace {
 	IERC20 public _pricing_token_vault;
 	IBookFactory public _book_factory; 
 	address private _current_order_book;
-	address private _current_option_contract;
 
 	struct BookData {
 		uint strike_per_underlying_unit;
@@ -43,19 +42,14 @@ contract OptionMarketPlace is IMarketPlace {
 		return _book_addresses.length;
 	}
 
-	modifier reset_order_state() {
-		_;
-		_current_order_book = address(0);
-		_current_option_contract = address(0);
-	}
-
-	function buy(address book_address, uint quantity, uint price) reset_order_state external returns(IBook.Status order_status) {
+	function buy(address book_address, uint quantity, uint price) external returns(IBook.Status order_status) {
 		BookData memory data = _book_data[book_address];
 		require(data.expiry > now);
 
 		IBook book = IBook(book_address);
 		_current_order_book = book_address;
-		IBook.Result memory result = book.buy(msg.sender, quantity, price);
+		IBook.Result memory result = book.buy(msg.sender, quantity, price, bytes20(0));
+		_current_order_book = address(0);
 
 		if ( result.status == IBook.Status.PARTIAL_EXEC )
 		{
@@ -69,12 +63,13 @@ contract OptionMarketPlace is IMarketPlace {
 		return result.status;
 	}
 
-	function sell_contract(address book_address, SmartOptionEthVsERC20 option_contract, uint quantity, uint price) reset_order_state internal returns(IBook.Status order_status) {
+	function sell_contract(address book_address, SmartOptionEthVsERC20 option_contract, uint quantity, uint price) internal returns(IBook.Status order_status) {
 		IBook book = IBook(book_address);
-		_current_order_book = book_address;
-		_current_option_contract = address(option_contract);
 		option_contract.lock(msg.sender, quantity);
-		return book.sell(msg.sender, quantity, price).status;
+		_current_order_book = book_address;
+		IBook.Status status = book.sell(msg.sender, quantity, price, bytes20(address(option_contract))).status;
+		_current_order_book = address(0);
+		return status;
 	}
 
 	function on_dead_order(IBook.Order memory order) internal {
@@ -95,28 +90,24 @@ contract OptionMarketPlace is IMarketPlace {
 		on_dead_order( IBook(book_address).cancel(msg.sender, order_id) );
 	}
 
-	function on_buy_execution(bytes20 hit_order_user_data) external {
+	function on_buy_execution(bytes20 hit_user_data, bytes20 order_user_data, IBook.Execution calldata execution) external {
 		require(msg.sender == _current_order_book
-			&&	hit_order_user_data != bytes20(0)
-			&&	_current_option_contract == address(0)
+			&&	hit_user_data != bytes20(0)
+			&&	order_user_data == bytes20(0)
 			);
-		IBook book = IBook(_current_order_book);
-		IBook.Execution memory execution = book.last_execution();
-		address option_address = address(hit_order_user_data);
-		SmartOptionEthVsERC20(option_address).transferLocked(execution.seller, execution.buyer, execution.quantity);
+		SmartOptionEthVsERC20(address(hit_user_data))
+			.transferLocked(execution.seller, execution.buyer, execution.quantity);
 		_pricing_token_vault.transferFrom(execution.buyer, execution.seller,
 			PriceLib.nominal_value(execution.quantity, execution.price));
 	}
 
-	function on_sell_execution(bytes20 hit_order_user_data) external {
+	function on_sell_execution(bytes20 hit_user_data, bytes20 order_user_data, IBook.Execution calldata execution) external {
 		require(msg.sender == _current_order_book
-			&&	hit_order_user_data == bytes20(0)
-			&&	_current_option_contract != address(0)
+			&&	hit_user_data == bytes20(0)
+			&&	order_user_data != bytes20(0)
 			);
-		IBook book = IBook(_current_order_book);
-		IBook.Execution memory execution = book.last_execution();
-		address option_address = _current_option_contract;
-		SmartOptionEthVsERC20(option_address).transferLocked(execution.seller, execution.buyer, execution.quantity);
+		SmartOptionEthVsERC20(address(order_user_data))
+			.transferLocked(execution.seller, execution.buyer, execution.quantity);
 		_pricing_token_vault.transfer(execution.seller,
 			PriceLib.nominal_value(execution.quantity, execution.price));
 	}
@@ -124,11 +115,6 @@ contract OptionMarketPlace is IMarketPlace {
 	function on_expired(IBook.Order calldata order) external {
 		require(msg.sender == _current_order_book);
 		on_dead_order(order);
-	}
-
-	function get_user_data() external returns(bytes20 order_user_data) {
-		require(msg.sender == _current_order_book);
-		return bytes20(_current_option_contract);
 	}
 
 	function open_book(

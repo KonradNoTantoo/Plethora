@@ -110,9 +110,9 @@ contract Book is IBook {
 		e.order_ids.push(order_id);
 	}
 
-	function on_execution(bytes32 hit_order, Execution memory exec) internal {
+	function on_execution(bytes32 hit_order, Execution memory exec, bytes20 user_data) internal {
 		_executions.push(exec);
-		emit Hit(hit_order, exec.buyer, exec.seller, exec.price, exec.quantity, _parent.get_user_data());
+		emit Hit(hit_order, exec.buyer, exec.seller, exec.price, exec.quantity, user_data);
 	}
 
 	function enter_order(Entry[] storage entries, int price, bytes32 order_id) internal {
@@ -133,7 +133,7 @@ contract Book is IBook {
 		new_entry(entries, 0, price, order_id);
 	}
 
-	function sell(address issuer, uint quantity, uint price) external returns(Result memory result) {
+	function sell(address issuer, uint quantity, uint price, bytes20 user_data) external returns(Result memory result) {
 		require( msg.sender == address(_parent) && is_order_legal(quantity, price) );
 
 		uint time = now;
@@ -173,8 +173,8 @@ contract Book is IBook {
 
 						remaining_quantity -= e.quantity;
 
-						on_execution(order_id, e);
-						_parent.on_sell_execution(o.user_data);
+						on_execution(order_id, e, user_data);
+						_parent.on_sell_execution(o.user_data, user_data, e);
 					}
 				}
 
@@ -193,7 +193,7 @@ contract Book is IBook {
 		o.price = price;
 		o.issuer = issuer;
 		o.alive = true;
-		o.user_data = _parent.get_user_data();
+		o.user_data = user_data;
 		bytes32 order_id = compute_order_id(o);
 		require(_orders[order_id].alive == false); // avoid collision
 		_orders[order_id] = o;
@@ -204,7 +204,7 @@ contract Book is IBook {
 		return in_book_result(o, quantity != remaining_quantity);
 	}
 
-	function buy(address issuer, uint quantity, uint price) external returns(Result memory result) {
+	function buy(address issuer, uint quantity, uint price, bytes20 user_data) external returns(Result memory result) {
 		require( msg.sender == address(_parent) && is_order_legal(quantity, price) );
 
 		uint time = now;
@@ -244,8 +244,8 @@ contract Book is IBook {
 
 						remaining_quantity -= e.quantity;
 
-						on_execution(order_id, e);
-						_parent.on_buy_execution(o.user_data);
+						on_execution(order_id, e, user_data);
+						_parent.on_buy_execution(o.user_data, user_data, e);
 					}
 				}
 
@@ -264,7 +264,7 @@ contract Book is IBook {
 		o.price = price;
 		o.issuer = issuer;
 		o.alive = true;
-		o.user_data = _parent.get_user_data();
+		o.user_data = user_data;
 		bytes32 order_id = compute_order_id(o);
 		require(_orders[order_id].alive == false); // avoid collision
 		_orders[order_id] = o;
