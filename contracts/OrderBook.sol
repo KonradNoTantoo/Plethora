@@ -22,7 +22,6 @@ contract Book is IBook {
 	Execution[] public _executions;
 	mapping (bytes32 => Order) public _orders;
 	uint public _minimum_order_quantity;
-	uint public _price_tick_size;
 	uint public _max_order_lifetime;
 
 	IMarketPlace public _parent;
@@ -30,12 +29,10 @@ contract Book is IBook {
 	constructor(
 			IMarketPlace parent
 		,	uint minimum_order_quantity
-		,	uint price_tick_size
 		,	uint max_order_lifetime
 		) public {
-		require(minimum_order_quantity > 0 && price_tick_size > 0 && max_order_lifetime > 0);
+		require(minimum_order_quantity > 0 && max_order_lifetime > 0);
 		_minimum_order_quantity = minimum_order_quantity;
-		_price_tick_size = price_tick_size;
 		_max_order_lifetime = max_order_lifetime;
 		_parent = parent;
 	}
@@ -89,8 +86,7 @@ contract Book is IBook {
 
 	function is_order_legal(uint quantity, uint price) public view returns(bool legal) {
 		return quantity >= _minimum_order_quantity
-			&& PriceLib.is_valid_nominal(quantity, price)
-			&& price % _price_tick_size == 0;
+			&& PriceLib.is_valid_nominal(quantity, price);
 	}
 
 	function compute_order_id(Order memory order) public pure returns (bytes32 id) {
@@ -299,10 +295,9 @@ contract Book is IBook {
 contract BookFactory is IBookFactory {
 	function create(
 			uint minimum_order_quantity
-		,	uint price_tick_size
 		,	uint max_order_lifetime
 		) external returns(IBook book)
 	{
-		return new Book(IMarketPlace(msg.sender), minimum_order_quantity, price_tick_size, max_order_lifetime);
+		return new Book(IMarketPlace(msg.sender), minimum_order_quantity, max_order_lifetime);
 	}
 }

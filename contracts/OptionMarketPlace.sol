@@ -121,7 +121,6 @@ contract OptionMarketPlace is IMarketPlace {
 			uint expiry
 		,	uint strike_per_underlying_unit
 		,	uint minimum_order_quantity
-		,	uint price_tick_size
 		,	uint max_order_lifetime
 	) external payable {
 		require(address(0) == address(_books[expiry][strike_per_underlying_unit])
@@ -131,7 +130,7 @@ contract OptionMarketPlace is IMarketPlace {
 			&&	msg.value == BOOK_OPENING_FEE
 			);
 
-		IBook book = _book_factory.create(minimum_order_quantity, price_tick_size, max_order_lifetime);
+		IBook book = _book_factory.create(minimum_order_quantity, max_order_lifetime);
 		_books[expiry][strike_per_underlying_unit] = book;
 		address book_address = address(book);
 		BookData storage data = _book_data[book_address];

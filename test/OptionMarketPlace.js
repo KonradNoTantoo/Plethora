@@ -71,7 +71,7 @@ describe('CallMarketPlace', function() {
 			value: ethers.utils.parseEther('0.001')
 		}
 
-		await expect(market.open_book(in_two_days, adjust_price(strike), minimum_quantity, tick_size, max_order_lifetime, gas_and_value))
+		await expect(market.open_book(in_two_days, adjust_price(strike), minimum_quantity, max_order_lifetime, gas_and_value))
 			.to.emit(market, "BookOpened")
 
 		book_address = await market.get_book_address( in_two_days, adjust_price(strike) )
@@ -427,7 +427,7 @@ describe('PutMarketPlace', function() {
 			value: ethers.utils.parseEther('0.001')
 		}
 
-		await expect(market.open_book(in_two_days, adjust_price(strike), minimum_quantity, tick_size, max_order_lifetime, gas_and_value))
+		await expect(market.open_book(in_two_days, adjust_price(strike), minimum_quantity, max_order_lifetime, gas_and_value))
 			.to.emit(market, "BookOpened")
 
 		book_address = await market.get_book_address( in_two_days, adjust_price(strike) )

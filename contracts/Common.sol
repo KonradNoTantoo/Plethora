@@ -58,7 +58,6 @@ interface IBook {
 interface IBookFactory {
 	function create(
 			uint minimum_order_quantity
-		,	uint price_tick_size
 		,	uint max_order_lifetime
 		) external returns(IBook book);
 }

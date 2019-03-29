@@ -26,28 +26,22 @@ describe('Book', function() {
 
 	beforeEach(async () => {
 		market = await deployContract(admin, MockMarketPlace, [])
-		book = await deployContract(admin, Book, [market.address, minimum_quantity, tick_size, max_order_lifetime])
+		book = await deployContract(admin, Book, [market.address, minimum_quantity, max_order_lifetime])
 		client1_market = market.connect(client1)
 		client2_market = market.connect(client2)
 	})
 
 	it('Bad constructors', async () => {
-		await expect(deployContract(admin, Book, [market.address, 0, tick_size, max_order_lifetime]))
+		await expect(deployContract(admin, Book, [market.address, 0, max_order_lifetime]))
 			.to.be.reverted
-		await expect(deployContract(admin, Book, [market.address, minimum_quantity, 0, max_order_lifetime]))
-			.to.be.reverted
-		await expect(deployContract(admin, Book, [market.address, minimum_quantity, tick_size, 0]))
+		await expect(deployContract(admin, Book, [market.address, minimum_quantity, 0]))
 			.to.be.reverted
 	})
 
 	it('Bad orders', async () => {
 		await expect(client1_market.buy(book.address, 100, p(3), max_gas))
 			.to.be.reverted
-		await expect(client1_market.buy(book.address, q(100), 3, max_gas))
-			.to.be.reverted
 		await expect(client1_market.sell(book.address, 100, p(3), max_gas))
-			.to.be.reverted
-		await expect(client1_market.sell(book.address, q(100), 3, max_gas))
 			.to.be.reverted
 	})
 
