@@ -1,0 +1,731 @@
+[
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "bid_size",
+		"outputs": [
+			{
+				"name": "size",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "entry",
+				"type": "uint256"
+			},
+			{
+				"name": "position",
+				"type": "uint256"
+			}
+		],
+		"name": "ask_order",
+		"outputs": [
+			{
+				"name": "order_id",
+				"type": "bytes32"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [],
+		"name": "clear",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "_price_tick_size",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "issuer",
+				"type": "address"
+			},
+			{
+				"name": "quantity",
+				"type": "uint256"
+			},
+			{
+				"name": "price",
+				"type": "uint256"
+			}
+		],
+		"name": "sell",
+		"outputs": [
+			{
+				"components": [
+					{
+						"name": "status",
+						"type": "uint8"
+					},
+					{
+						"components": [
+							{
+								"name": "time",
+								"type": "uint256"
+							},
+							{
+								"name": "quantity",
+								"type": "uint256"
+							},
+							{
+								"name": "price",
+								"type": "uint256"
+							},
+							{
+								"name": "alive",
+								"type": "bool"
+							},
+							{
+								"name": "issuer",
+								"type": "address"
+							},
+							{
+								"name": "user_data",
+								"type": "bytes20"
+							}
+						],
+						"name": "order",
+						"type": "tuple"
+					}
+				],
+				"name": "result",
+				"type": "tuple"
+			}
+		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "entry",
+				"type": "uint256"
+			},
+			{
+				"name": "position",
+				"type": "uint256"
+			}
+		],
+		"name": "bid_order",
+		"outputs": [
+			{
+				"name": "order_id",
+				"type": "bytes32"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "_max_order_lifetime",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"name": "_orders",
+		"outputs": [
+			{
+				"name": "time",
+				"type": "uint256"
+			},
+			{
+				"name": "quantity",
+				"type": "uint256"
+			},
+			{
+				"name": "price",
+				"type": "uint256"
+			},
+			{
+				"name": "alive",
+				"type": "bool"
+			},
+			{
+				"name": "issuer",
+				"type": "address"
+			},
+			{
+				"name": "user_data",
+				"type": "bytes20"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "_minimum_order_quantity",
+		"outputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "issuer",
+				"type": "address"
+			},
+			{
+				"name": "order_id",
+				"type": "bytes32"
+			}
+		],
+		"name": "cancel",
+		"outputs": [
+			{
+				"components": [
+					{
+						"name": "time",
+						"type": "uint256"
+					},
+					{
+						"name": "quantity",
+						"type": "uint256"
+					},
+					{
+						"name": "price",
+						"type": "uint256"
+					},
+					{
+						"name": "alive",
+						"type": "bool"
+					},
+					{
+						"name": "issuer",
+						"type": "address"
+					},
+					{
+						"name": "user_data",
+						"type": "bytes20"
+					}
+				],
+				"name": "order",
+				"type": "tuple"
+			}
+		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "issuer",
+				"type": "address"
+			},
+			{
+				"name": "quantity",
+				"type": "uint256"
+			},
+			{
+				"name": "price",
+				"type": "uint256"
+			}
+		],
+		"name": "buy",
+		"outputs": [
+			{
+				"components": [
+					{
+						"name": "status",
+						"type": "uint8"
+					},
+					{
+						"components": [
+							{
+								"name": "time",
+								"type": "uint256"
+							},
+							{
+								"name": "quantity",
+								"type": "uint256"
+							},
+							{
+								"name": "price",
+								"type": "uint256"
+							},
+							{
+								"name": "alive",
+								"type": "bool"
+							},
+							{
+								"name": "issuer",
+								"type": "address"
+							},
+							{
+								"name": "user_data",
+								"type": "bytes20"
+							}
+						],
+						"name": "order",
+						"type": "tuple"
+					}
+				],
+				"name": "result",
+				"type": "tuple"
+			}
+		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"components": [
+					{
+						"name": "time",
+						"type": "uint256"
+					},
+					{
+						"name": "quantity",
+						"type": "uint256"
+					},
+					{
+						"name": "price",
+						"type": "uint256"
+					},
+					{
+						"name": "alive",
+						"type": "bool"
+					},
+					{
+						"name": "issuer",
+						"type": "address"
+					},
+					{
+						"name": "user_data",
+						"type": "bytes20"
+					}
+				],
+				"name": "order",
+				"type": "tuple"
+			}
+		],
+		"name": "compute_order_id",
+		"outputs": [
+			{
+				"name": "id",
+				"type": "bytes32"
+			}
+		],
+		"payable": false,
+		"stateMutability": "pure",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "order_id",
+				"type": "bytes32"
+			}
+		],
+		"name": "get_order",
+		"outputs": [
+			{
+				"components": [
+					{
+						"name": "time",
+						"type": "uint256"
+					},
+					{
+						"name": "quantity",
+						"type": "uint256"
+					},
+					{
+						"name": "price",
+						"type": "uint256"
+					},
+					{
+						"name": "alive",
+						"type": "bool"
+					},
+					{
+						"name": "issuer",
+						"type": "address"
+					},
+					{
+						"name": "user_data",
+						"type": "bytes20"
+					}
+				],
+				"name": "gotten",
+				"type": "tuple"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "ask_size",
+		"outputs": [
+			{
+				"name": "size",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "_executions",
+		"outputs": [
+			{
+				"name": "time",
+				"type": "uint256"
+			},
+			{
+				"name": "price",
+				"type": "uint256"
+			},
+			{
+				"name": "quantity",
+				"type": "uint256"
+			},
+			{
+				"name": "buyer",
+				"type": "address"
+			},
+			{
+				"name": "seller",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "_parent",
+		"outputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "quantity",
+				"type": "uint256"
+			},
+			{
+				"name": "price",
+				"type": "uint256"
+			}
+		],
+		"name": "is_order_legal",
+		"outputs": [
+			{
+				"name": "legal",
+				"type": "bool"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "_ask",
+		"outputs": [
+			{
+				"name": "signed_price",
+				"type": "int256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "_bid",
+		"outputs": [
+			{
+				"name": "signed_price",
+				"type": "int256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "index",
+				"type": "uint256"
+			}
+		],
+		"name": "bid_entries",
+		"outputs": [
+			{
+				"name": "signed_price",
+				"type": "int256"
+			},
+			{
+				"name": "size",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "index",
+				"type": "uint256"
+			}
+		],
+		"name": "ask_entries",
+		"outputs": [
+			{
+				"name": "signed_price",
+				"type": "int256"
+			},
+			{
+				"name": "size",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "last_execution",
+		"outputs": [
+			{
+				"components": [
+					{
+						"name": "time",
+						"type": "uint256"
+					},
+					{
+						"name": "price",
+						"type": "uint256"
+					},
+					{
+						"name": "quantity",
+						"type": "uint256"
+					},
+					{
+						"name": "buyer",
+						"type": "address"
+					},
+					{
+						"name": "seller",
+						"type": "address"
+					}
+				],
+				"name": "last",
+				"type": "tuple"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"name": "parent",
+				"type": "address"
+			},
+			{
+				"name": "minimum_order_quantity",
+				"type": "uint256"
+			},
+			{
+				"name": "price_tick_size",
+				"type": "uint256"
+			},
+			{
+				"name": "max_order_lifetime",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"name": "id",
+				"type": "bytes32"
+			}
+		],
+		"name": "BuyOrder",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"name": "id",
+				"type": "bytes32"
+			}
+		],
+		"name": "SellOrder",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"name": "id",
+				"type": "bytes32"
+			}
+		],
+		"name": "Expired",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"name": "id",
+				"type": "bytes32"
+			}
+		],
+		"name": "Cancelled",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"name": "hit_order",
+				"type": "bytes32"
+			},
+			{
+				"indexed": false,
+				"name": "buyer",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"name": "seller",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"name": "price",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"name": "quantity",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"name": "user_data",
+				"type": "bytes20"
+			}
+		],
+		"name": "Hit",
+		"type": "event"
+	}
+]
