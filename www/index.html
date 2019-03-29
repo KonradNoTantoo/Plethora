@@ -36,7 +36,7 @@
 				<div class="section">
 					<h3>Pinned books</h3>
 					<div>
-						<input id="order-depth" type="number" value="10" min="1" />
+						<!-- input id="order-depth" type="number" value="10" min="1" /-->
 						<button onclick="refresh_pinned_books()">Refresh</button>
 					</div>
 					<div class="subsection">
@@ -77,11 +77,9 @@
 							<dt>Expiry:</dt>
 							<dd><input id="openbook-expiry" type="date"></dd>
 							<dt>DAI/ETH Strike:</dt>
-							<dd><input id="openbook-strike" type="number" step="0.0001"></dd>
+							<dd><input id="openbook-strike" type="number" step="0.125"></dd>
 							<dt>Minimum order quantity (ETH):</dt>
 							<dd><input id="openbook-minqty" type="number" step="0.0001" value="0.0001"></dd>
-							<dt>Price tick size (DAI):</dt>
-							<dd><input id="openbook-tick" type="number" step="0.0001" value="0.0001"></dd>
 							<dt>Order lifetime (hours):</dt>
 							<dd><input id="openbook-orderlife" type="number" step="1" min="24" value="24"></dd>
 							<dt></dt>
@@ -93,14 +91,17 @@
 				</div>
 			</div>
 		</div>
+		<div id="contracts" class="column">
+			<h2 class="title">Call</h2>
+			<div id="call-contents">
+			</div>
+			<h2 class="title">Put</h2>
+			<div id="put-contents">
+			</div>
+		</div>
 		<div id="executions" class="column">
 			<h2 class="title">Executions</h2>
 			<div id="executions-contents">
-			</div>
-		</div>
-		<div id="contracts" class="column">
-			<h2 class="title">Contract</h2>
-			<div id="contracts-contents">
 			</div>
 		</div>
 		<script

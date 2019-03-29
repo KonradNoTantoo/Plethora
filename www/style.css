@@ -47,15 +47,19 @@ body {
 #books {
 	display: none;
 	border-right: 1px solid gainsboro;
-}
-
-#executions {
-	display: none;
-	border-right: 1px solid gainsboro;
+	width: 50%;
+	min-width: 40em;
 }
 
 #contracts {
 	display: none;
+	border-right: 1px solid gainsboro;
+	width: 24%;
+}
+
+#executions {
+	display: none;
+	width: 24%;
 }
 
 .wait {
@@ -66,19 +70,19 @@ body {
 	background-image: url(wait.gif);
 	background-repeat: no-repeat;
 	background-size: auto auto;
+	clear: both;
 }
 
 .column {
 	float: left;
 	margin-top: 4em;
-	width: 33%;
 
 	text-align: center;
 }
 
 .section {
 	margin: 0 2em;
-	min-width: 16em;
+	min-width: 40em;
 	clear: both;
 }
 
@@ -89,13 +93,12 @@ body {
 
 .subsection {
 	float: left;
-	font-size: 70%;
-	width: 16em;
+	min-width: 19em;
 	margin: 0 0.5em;
 }
 
 .form {
-	width: 16em;
+	width: 17em;
 	margin: 0 auto;
 	text-align: justify;
 }
@@ -121,44 +124,96 @@ body {
 .book {
 	background-color: gainsboro;
 	margin: 0.5em 0;
-	padding: 0.5em 0;
+	padding: 0.5em 0.5em;
+	width: 18em;
 }
 
 .book>h5 {
-	font-size: 110%;
+	font-size: 120%;
 }
 
 .bid {
 	float: left;
 	margin: 0 0.2em;
 	padding: 0 0.3em;
-	width: 7em;
+	width: 10em;
 	background-color: white;
 	text-align: right;
+	font-family: monospace;
 }
 
-.bid>h5 {
+.bid>p {
 	text-align: center;
+	font-family: sans-serif;
 }
 
 .ask {
 	float: left;
 	margin: 0 0.2em;
 	padding: 0 0.3em;
-	width: 7em;
+	width: 10em;
 	background-color: white;
 	text-align: left;
+	font-family: monospace;
 }
 
-.ask>h5 {
+.ask>p {
 	text-align: center;
+	font-family: sans-serif;
+}
+
+.owned-order {
+	font-weight: bold;
+	color: darkred;
 }
 
 .order-form {
-	clear: both;	
-	max-width: 14em;
+	clear: both;
+	padding-top: 0.5em;
+	width: 18em;
 }
 
 .order-form>input {
-	max-width: 3em;
+	max-width: 4em;
+}
+
+.address {
+	font-family: monospace;
+	color: grey;
+	font-size: 80%;
+}
+
+.call, .put {
+	margin: 0.5em;
+	background-color: gainsboro;
+}
+
+.option-waiting {
+	color: grey;
+	font-size: 120%;
+}
+
+.option-expiring {
+	color: darkred;
+	font-size: 120%;
+}
+
+.option-running {
+	color: darkgreen;
+	font-size: 120%;
+}
+
+.option-expired {
+	color: darkred;
+	font-size: 120%;
+}
+
+.option-settled {
+	color: grey;
+	font-size: 120%;
+}
+
+.option-liquidated {
+	color: grey;
+	font-size: 120%;
 }

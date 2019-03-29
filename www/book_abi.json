@@ -38,29 +38,6 @@
 	},
 	{
 		"constant": false,
-		"inputs": [],
-		"name": "clear",
-		"outputs": [],
-		"payable": false,
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"constant": true,
-		"inputs": [],
-		"name": "_price_tick_size",
-		"outputs": [
-			{
-				"name": "",
-				"type": "uint256"
-			}
-		],
-		"payable": false,
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"constant": false,
 		"inputs": [
 			{
 				"name": "issuer",
@@ -73,9 +50,13 @@
 			{
 				"name": "price",
 				"type": "uint256"
+			},
+			{
+				"name": "user_data",
+				"type": "bytes20"
 			}
 		],
-		"name": "sell",
+		"name": "buy",
 		"outputs": [
 			{
 				"components": [
@@ -118,6 +99,15 @@
 				"type": "tuple"
 			}
 		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [],
+		"name": "clear",
+		"outputs": [],
 		"payable": false,
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -254,69 +244,6 @@
 					}
 				],
 				"name": "order",
-				"type": "tuple"
-			}
-		],
-		"payable": false,
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"constant": false,
-		"inputs": [
-			{
-				"name": "issuer",
-				"type": "address"
-			},
-			{
-				"name": "quantity",
-				"type": "uint256"
-			},
-			{
-				"name": "price",
-				"type": "uint256"
-			}
-		],
-		"name": "buy",
-		"outputs": [
-			{
-				"components": [
-					{
-						"name": "status",
-						"type": "uint8"
-					},
-					{
-						"components": [
-							{
-								"name": "time",
-								"type": "uint256"
-							},
-							{
-								"name": "quantity",
-								"type": "uint256"
-							},
-							{
-								"name": "price",
-								"type": "uint256"
-							},
-							{
-								"name": "alive",
-								"type": "bool"
-							},
-							{
-								"name": "issuer",
-								"type": "address"
-							},
-							{
-								"name": "user_data",
-								"type": "bytes20"
-							}
-						],
-						"name": "order",
-						"type": "tuple"
-					}
-				],
-				"name": "result",
 				"type": "tuple"
 			}
 		],
@@ -562,6 +489,73 @@
 		"type": "function"
 	},
 	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "issuer",
+				"type": "address"
+			},
+			{
+				"name": "quantity",
+				"type": "uint256"
+			},
+			{
+				"name": "price",
+				"type": "uint256"
+			},
+			{
+				"name": "user_data",
+				"type": "bytes20"
+			}
+		],
+		"name": "sell",
+		"outputs": [
+			{
+				"components": [
+					{
+						"name": "status",
+						"type": "uint8"
+					},
+					{
+						"components": [
+							{
+								"name": "time",
+								"type": "uint256"
+							},
+							{
+								"name": "quantity",
+								"type": "uint256"
+							},
+							{
+								"name": "price",
+								"type": "uint256"
+							},
+							{
+								"name": "alive",
+								"type": "bool"
+							},
+							{
+								"name": "issuer",
+								"type": "address"
+							},
+							{
+								"name": "user_data",
+								"type": "bytes20"
+							}
+						],
+						"name": "order",
+						"type": "tuple"
+					}
+				],
+				"name": "result",
+				"type": "tuple"
+			}
+		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
 		"constant": true,
 		"inputs": [
 			{
@@ -628,10 +622,6 @@
 			},
 			{
 				"name": "minimum_order_quantity",
-				"type": "uint256"
-			},
-			{
-				"name": "price_tick_size",
 				"type": "uint256"
 			},
 			{
