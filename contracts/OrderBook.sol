@@ -120,7 +120,7 @@ contract Book is IBook {
 				return;
 			}
 
-			if (entry.signed_price < price) {
+			if (entry.signed_price > price) {
 				new_entry(entries, i, price, order_id);
 				return;
 			}

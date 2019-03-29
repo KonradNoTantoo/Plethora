@@ -128,7 +128,7 @@ describe('Book', function() {
 		expect(order.alive).is.true
 	})
 
-	it('Trigger partial buy execution', async () => {
+	it('Trigger partial buy, missing liquidity', async () => {
 		const qty_sell = q(100)
 		const qty_buy = qty_sell.mul(3)
 		await client1_market.sell(book.address, qty_sell, p(2), max_gas)
@@ -157,6 +157,72 @@ describe('Book', function() {
 		expect(order.alive).is.true
 	})
 
+	it('Trigger partial buy, reach limit', async () => {
+		const qty_sell = q(100)
+		const qty_buy = qty_sell.mul(3)
+		await client1_market.sell(book.address, qty_sell, p(2), max_gas)
+
+		expect(await book.bid_size()).to.eq(1)
+		expect(await book.ask_size()).to.eq(0)
+
+		let [price, nb_entries] = await book.bid_entries(0)
+		expect(price).is.eq(p(2))
+		expect(nb_entries).is.eq(1)
+
+		await client1_market.sell(book.address, qty_sell, p(4), max_gas)
+
+		expect(await book.bid_size()).to.eq(2)
+		expect(await book.ask_size()).to.eq(0)
+
+		;[price, nb_entries] = await book.bid_entries(0)
+		expect(price).is.eq(p(4))
+		expect(nb_entries).is.eq(1)
+
+		;[price, nb_entries] = await book.bid_entries(1)
+		expect(price).is.eq(p(2))
+		expect(nb_entries).is.eq(1)
+
+		await client1_market.sell(book.address, qty_sell, p(3), max_gas);
+
+		expect(await book.bid_size()).to.eq(3)
+		expect(await book.ask_size()).to.eq(0)
+
+		;[price, nb_entries] = await book.bid_entries(0)
+		expect(price).is.eq(p(4))
+		expect(nb_entries).is.eq(1)
+
+		;[price, nb_entries] = await book.bid_entries(1)
+		expect(price).is.eq(p(3))
+		expect(nb_entries).is.eq(1)
+
+		;[price, nb_entries] = await book.bid_entries(2)
+		expect(price).is.eq(p(2))
+		expect(nb_entries).is.eq(1)
+
+		await expect(client2_market.buy(book.address, qty_buy, p(3), max_gas))
+		 	.to.emit(book, 'Hit')
+		 	//.withArgs(order_id, client2.address, client1.address, p(2), qty_sell, '0x0000000000000000000000000000000000000000')
+
+		expect(await book.bid_size()).to.eq(1)
+		expect(await book.ask_size()).to.eq(1)
+
+		const buy_order_id = await book.ask_order(0, 0)
+
+		const buy_order = await book.get_order(buy_order_id)
+		expect(buy_order.quantity).is.eq(qty_buy.sub(qty_sell).sub(qty_sell))
+		expect(buy_order.issuer).is.eq(client2.address)
+		expect(buy_order.price).is.eq(p(3))
+		expect(buy_order.alive).is.true
+
+		const sell_order_id = await book.bid_order(0, 0)
+
+		const sell_order = await book.get_order(sell_order_id)
+		expect(sell_order.quantity).is.eq(qty_sell)
+		expect(sell_order.issuer).is.eq(client1.address)
+		expect(sell_order.price).is.eq(p(4))
+		expect(sell_order.alive).is.true
+	})
+
 	it('Trigger full sell execution', async () => {
 		const qty_buy = q(200)
 		const qty_sell = q(100)
@@ -173,7 +239,6 @@ describe('Book', function() {
 
 		await expect(client2_market.sell(book.address, qty_sell, p(2), max_gas))
 		 	.to.emit(book, 'Hit')
-		 	.withArgs(order_id, client1.address, client2.address, p(3), qty_sell, '0x0000000000000000000000000000000000000000')
 
 		expect(await book.bid_size()).to.eq(0)
 		expect(await book.ask_size()).to.eq(1)
@@ -183,6 +248,71 @@ describe('Book', function() {
 		expect(order.issuer).is.eq(client1.address)
 		expect(order.price).is.eq(p(3))
 		expect(order.alive).is.true
+	})
+
+	it('Trigger partial sell, reach limit', async () => {
+		const qty_buy = q(100)
+		const qty_sell = qty_buy.mul(3)
+		await client1_market.buy(book.address, qty_buy, p(2), max_gas)
+
+		expect(await book.bid_size()).to.eq(0)
+		expect(await book.ask_size()).to.eq(1)
+
+		let [price, nb_entries] = await book.ask_entries(0)
+		expect(price).is.eq(-p(2))
+		expect(nb_entries).is.eq(1)
+
+		await client1_market.buy(book.address, qty_buy, p(4), max_gas)
+
+		expect(await book.bid_size()).to.eq(0)
+		expect(await book.ask_size()).to.eq(2)
+
+		;[price, nb_entries] = await book.ask_entries(0)
+		expect(price).is.eq(-p(2))
+		expect(nb_entries).is.eq(1)
+
+		;[price, nb_entries] = await book.ask_entries(1)
+		expect(price).is.eq(-p(4))
+		expect(nb_entries).is.eq(1)
+
+		await client1_market.buy(book.address, qty_buy, p(3), max_gas);
+
+		expect(await book.bid_size()).to.eq(0)
+		expect(await book.ask_size()).to.eq(3)
+
+		;[price, nb_entries] = await book.ask_entries(0)
+		expect(price).is.eq(-p(2))
+		expect(nb_entries).is.eq(1)
+
+		;[price, nb_entries] = await book.ask_entries(1)
+		expect(price).is.eq(-p(3))
+		expect(nb_entries).is.eq(1)
+
+		;[price, nb_entries] = await book.ask_entries(2)
+		expect(price).is.eq(-p(4))
+		expect(nb_entries).is.eq(1)
+
+		await expect(client2_market.sell(book.address, qty_sell, p(3), max_gas))
+		 	.to.emit(book, 'Hit')
+
+		expect(await book.bid_size()).to.eq(1)
+		expect(await book.ask_size()).to.eq(1)
+
+		const buy_order_id = await book.ask_order(0, 0)
+
+		const buy_order = await book.get_order(buy_order_id)
+		expect(buy_order.quantity).is.eq(qty_buy)
+		expect(buy_order.issuer).is.eq(client1.address)
+		expect(buy_order.price).is.eq(p(2))
+		expect(buy_order.alive).is.true
+
+		const sell_order_id = await book.bid_order(0, 0)
+
+		const sell_order = await book.get_order(sell_order_id)
+		expect(sell_order.quantity).is.eq(qty_sell.sub(qty_buy).sub(qty_buy))
+		expect(sell_order.issuer).is.eq(client2.address)
+		expect(sell_order.price).is.eq(p(3))
+		expect(sell_order.alive).is.true
 	})
 
 	it('Forbid cancellation', async () => {
