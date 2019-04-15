@@ -101,6 +101,10 @@ contract SmartOptionEthVsERC20 is IERC20 {
 		require(_erc20_minter.transfer(msg.sender, _erc20_minter.balanceOf(address(this))));
 	}
 
+	// ERC20 implementation
+
+	uint8 public constant decimals = 18;
+
 	/**
 	* @dev Total number of tokens in existence
 	*/
@@ -200,8 +204,6 @@ contract SmartOptionEthVsERC20 is IERC20 {
 		emit Transfer(from, to, nb_shares);
 		return true;
 	}
-
-	// function exercise(address payable buyer, uint quantity) external payable;
 }
 
 
@@ -226,9 +228,10 @@ contract CoveredEthCall is SmartOptionEthVsERC20 {
 		buyer.transfer(quantity);
 	}
 
-	// function exercise(address payable buyer, uint quantity) external payable {
-	// 	call(buyer, quantity);
-	// }
+	// ERC20 implementation
+
+	string public constant name = "Eth call option";
+	string public constant symbol = "OPTC";
 }
 
 
@@ -256,8 +259,8 @@ contract CoveredEthPut is SmartOptionEthVsERC20 {
 		 	);
 	}
 
-	// function exercise(address payable buyer, uint quantity) external payable {
-	// 	require(msg.value == quantity);
-	// 	put(buyer);
-	// }
+	// ERC20 implementation
+
+	string public constant name = "Eth put option";
+	string public constant symbol = "OPTP";
 }

@@ -57,8 +57,7 @@ interface IBook {
 
 interface IBookFactory {
 	function create(
-			uint minimum_order_quantity
-		,	uint max_order_lifetime
+			uint order_quantity_unit
 		) external returns(IBook book);
 }
 
@@ -66,5 +65,4 @@ interface IBookFactory {
 interface IMarketPlace {
 	function on_buy_execution(bytes20 hit_user_data, bytes20 order_user_data, IBook.Execution calldata execution) external;
 	function on_sell_execution(bytes20 hit_user_data, bytes20 order_user_data, IBook.Execution calldata execution) external;
-	function on_expired(IBook.Order calldata order) external;
 }

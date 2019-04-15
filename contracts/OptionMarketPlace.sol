@@ -10,7 +10,6 @@ contract OptionMarketPlace is IMarketPlace {
 	event BookClosed(address book_address);
 
 	uint constant MINIMUM_TRADING_TIME = 1 days;
-	uint constant MINIMUM_ORDER_LIFETIME = 1 days;
 	uint constant BOOK_OPENING_FEE = 1 finney;
 	uint constant BOOK_CLOSE_DELAY = 100 days;
 
@@ -120,17 +119,15 @@ contract OptionMarketPlace is IMarketPlace {
 	function open_book(
 			uint expiry
 		,	uint strike_per_underlying_unit
-		,	uint minimum_order_quantity
-		,	uint max_order_lifetime
+		,	uint order_quantity_unit
 	) external payable {
 		require(address(0) == address(_books[expiry][strike_per_underlying_unit])
 			&&	expiry >= (now + MINIMUM_TRADING_TIME)
 			&&	strike_per_underlying_unit > 0
-			&&	max_order_lifetime >= MINIMUM_ORDER_LIFETIME
 			&&	msg.value == BOOK_OPENING_FEE
 			);
 
-		IBook book = _book_factory.create(minimum_order_quantity, max_order_lifetime);
+		IBook book = _book_factory.create(order_quantity_unit);
 		_books[expiry][strike_per_underlying_unit] = book;
 		address book_address = address(book);
 		BookData storage data = _book_data[book_address];

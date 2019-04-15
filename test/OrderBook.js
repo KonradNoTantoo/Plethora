@@ -16,25 +16,22 @@ describe('Book', function() {
 	let client1_market
 	let client2_market
 	let book
-	const minimum_quantity = ethers.utils.parseEther('0.01')
-	const tick_size = ethers.utils.parseEther('0.0001')
-	const max_order_lifetime = 2 // 2 seconds, for test purposes
+	const quantity_unit = ethers.utils.parseEther('0.01')
+	const price_unit = ethers.utils.parseEther('0.0001')
 	const max_gas = { gasLimit: 5000000 }
 
-	function q(qty) { return minimum_quantity.add(qty) }
-	function p(px) { return tick_size.mul(px) }
+	function q(qty) { return quantity_unit.mul(qty) }
+	function p(px) { return price_unit.mul(px) }
 
 	beforeEach(async () => {
 		market = await deployContract(admin, MockMarketPlace, [])
-		book = await deployContract(admin, Book, [market.address, minimum_quantity, max_order_lifetime])
+		book = await deployContract(admin, Book, [market.address, quantity_unit])
 		client1_market = market.connect(client1)
 		client2_market = market.connect(client2)
 	})
 
 	it('Bad constructors', async () => {
-		await expect(deployContract(admin, Book, [market.address, 0, max_order_lifetime]))
-			.to.be.reverted
-		await expect(deployContract(admin, Book, [market.address, minimum_quantity, 0]))
+		await expect(deployContract(admin, Book, [market.address, 0]))
 			.to.be.reverted
 	})
 

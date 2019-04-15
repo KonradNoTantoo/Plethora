@@ -34,14 +34,13 @@ describe('CallMarketPlace', function() {
 	let client3_market
 	let book
 	let book_address
-	const minimum_quantity = ethers.utils.parseEther('0.01')
-	const tick_size = ethers.utils.bigNumberify(adjust_price(0.125))
-	const max_order_lifetime = SECONDS_IN_A_DAY
+	const quantity_unit = ethers.utils.parseEther('0.01')
+	const price_unit = ethers.utils.bigNumberify(adjust_price(0.125))
 	const max_gas = { gasLimit: 6000000 }
 	const strike = 100.3
 
-	function q(qty) { return minimum_quantity.add(qty) }
-	function p(px) { return tick_size.mul(px) }
+	function q(qty) { return quantity_unit.mul(qty) }
+	function p(px) { return price_unit.mul(px) }
 
 	async function call_from_order_id(order_id) {
 		const order = await book.get_order(order_id)
@@ -71,7 +70,7 @@ describe('CallMarketPlace', function() {
 			value: ethers.utils.parseEther('0.001')
 		}
 
-		await expect(market.open_book(in_two_days, adjust_price(strike), minimum_quantity, max_order_lifetime, gas_and_value))
+		await expect(market.open_book(in_two_days, adjust_price(strike), quantity_unit, gas_and_value))
 			.to.emit(market, "BookOpened")
 
 		book_address = await market.get_book_address( in_two_days, adjust_price(strike) )
@@ -390,14 +389,13 @@ describe('PutMarketPlace', function() {
 	let client3_market
 	let book
 	let book_address
-	const minimum_quantity = ethers.utils.parseEther('0.01')
-	const tick_size = ethers.utils.bigNumberify(adjust_price(0.125))
-	const max_order_lifetime = SECONDS_IN_A_DAY
+	const quantity_unit = ethers.utils.parseEther('0.01')
+	const price_unit = ethers.utils.bigNumberify(adjust_price(0.125))
 	const max_gas = { gasLimit: 6000000 }
 	const strike = 100.4
 
-	function q(qty) { return minimum_quantity.add(qty) }
-	function p(px) { return tick_size.mul(px) }
+	function q(qty) { return quantity_unit.mul(qty) }
+	function p(px) { return price_unit.mul(px) }
 
 	async function put_from_order_id(order_id) {
 		const order = await book.get_order(order_id)
@@ -427,7 +425,7 @@ describe('PutMarketPlace', function() {
 			value: ethers.utils.parseEther('0.001')
 		}
 
-		await expect(market.open_book(in_two_days, adjust_price(strike), minimum_quantity, max_order_lifetime, gas_and_value))
+		await expect(market.open_book(in_two_days, adjust_price(strike), quantity_unit, gas_and_value))
 			.to.emit(market, "BookOpened")
 
 		book_address = await market.get_book_address( in_two_days, adjust_price(strike) )

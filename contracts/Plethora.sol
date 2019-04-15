@@ -23,6 +23,12 @@ contract Plethora is IERC20 {
 		mintFor(msg.sender, nb_token);
 	}
 
+	// ERC20 implementation
+
+	string public constant name = "Plethora";
+	string public constant symbol = "PTH";
+	uint8 public constant decimals = 18;
+
 	/**
 	* @dev Total number of tokens in existence
 	*/
