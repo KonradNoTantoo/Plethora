@@ -23,9 +23,9 @@ interface IBook {
 		uint time;
 		uint quantity;
 		uint price;
-		bool alive;
 		address issuer;
-		bytes20 user_data;
+		uint128 alive;
+		uint128 is_buy;
 	}
 
 	struct Result {
@@ -45,9 +45,9 @@ interface IBook {
 
 	function get_order(bytes32 order_id) external view returns(Order memory gotten);
 
-	function sell(address issuer, uint quantity, uint price, bytes20 user_data) external returns(Result memory result);
+	function sell(address issuer, uint quantity, uint price) external returns(Result memory result);
 
-	function buy(address issuer, uint quantity, uint price, bytes20 user_data) external returns(Result memory result);
+	function buy(address issuer, uint quantity, uint price) external returns(Result memory result);
 
 	function cancel(address issuer, bytes32 order_id) external returns(Order memory order);
 
@@ -56,13 +56,11 @@ interface IBook {
 
 
 interface IBookFactory {
-	function create(
-			uint order_quantity_unit
-		) external returns(IBook book);
+	function create(uint order_quantity_unit) external returns(IBook book);
 }
 
 
-interface IMarketPlace {
-	function on_buy_execution(bytes20 hit_user_data, bytes20 order_user_data, IBook.Execution calldata execution) external;
-	function on_sell_execution(bytes20 hit_user_data, bytes20 order_user_data, IBook.Execution calldata execution) external;
+interface IBookOwner {
+	function on_buy_execution(IBook.Execution calldata execution) external;
+	function on_sell_execution(IBook.Execution calldata execution) external;
 }

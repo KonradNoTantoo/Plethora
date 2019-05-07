@@ -3,7 +3,7 @@ const ethers = require('ethers')
 const {createMockProvider, deployContract, getWallets, solidity} = require('ethereum-waffle')
 
 const Book = require('../build/Book')
-const MockMarketPlace = require('../build/MockMarketPlace')
+const MockBookOwner = require('../build/MockBookOwner')
 
 chai.use(solidity)
 const {expect} = chai
@@ -24,7 +24,7 @@ describe('Book', function() {
 	function p(px) { return price_unit.mul(px) }
 
 	beforeEach(async () => {
-		market = await deployContract(admin, MockMarketPlace, [])
+		market = await deployContract(admin, MockBookOwner, [])
 		book = await deployContract(admin, Book, [market.address, quantity_unit])
 		client1_market = market.connect(client1)
 		client2_market = market.connect(client2)
@@ -87,14 +87,14 @@ describe('Book', function() {
 		expect(order1.quantity).is.eq(qty1)
 		expect(order1.issuer).is.eq(client1.address)
 		expect(order1.price).is.eq(px)
-		expect(order1.alive).is.true
+		expect(order1.alive).is.eq(1)
 
 		const order2_id = await book.bid_order(0, 1)
 		const order2 = await book.get_order(order2_id)
 		expect(order2.quantity).is.eq(qty2)
 		expect(order2.issuer).is.eq(client2.address)
 		expect(order2.price).is.eq(px)
-		expect(order2.alive).is.true
+		expect(order2.alive).is.eq(1)
 	})
 
 	it('Trigger full buy execution', async () => {
@@ -113,7 +113,7 @@ describe('Book', function() {
 
 		await expect(client2_market.buy(book.address, qty_buy, p(3), max_gas))
 		 	.to.emit(book, 'Hit')
-		 	.withArgs(order_id, client2.address, client1.address, p(2), qty_buy, '0x0000000000000000000000000000000000000000')
+		 	.withArgs(order_id, client2.address, client1.address, p(2), qty_buy)
 
 		expect(await book.bid_size()).to.eq(1)
 		expect(await book.ask_size()).to.eq(0)
@@ -122,7 +122,7 @@ describe('Book', function() {
 		expect(order.quantity).is.eq(qty_sell.sub(qty_buy))
 		expect(order.issuer).is.eq(client1.address)
 		expect(order.price).is.eq(p(2))
-		expect(order.alive).is.true
+		expect(order.alive).is.eq(1)
 	})
 
 	it('Trigger partial buy, missing liquidity', async () => {
@@ -151,7 +151,7 @@ describe('Book', function() {
 		expect(order.quantity).is.eq(qty_buy.sub(qty_sell.mul(2)))
 		expect(order.issuer).is.eq(client2.address)
 		expect(order.price).is.eq(p(3))
-		expect(order.alive).is.true
+		expect(order.alive).is.eq(1)
 	})
 
 	it('Trigger partial buy, reach limit', async () => {
@@ -209,7 +209,7 @@ describe('Book', function() {
 		expect(buy_order.quantity).is.eq(qty_buy.sub(qty_sell).sub(qty_sell))
 		expect(buy_order.issuer).is.eq(client2.address)
 		expect(buy_order.price).is.eq(p(3))
-		expect(buy_order.alive).is.true
+		expect(buy_order.alive).is.eq(1)
 
 		const sell_order_id = await book.bid_order(0, 0)
 
@@ -217,7 +217,7 @@ describe('Book', function() {
 		expect(sell_order.quantity).is.eq(qty_sell)
 		expect(sell_order.issuer).is.eq(client1.address)
 		expect(sell_order.price).is.eq(p(4))
-		expect(sell_order.alive).is.true
+		expect(sell_order.alive).is.eq(1)
 	})
 
 	it('Trigger full sell execution', async () => {
@@ -244,7 +244,7 @@ describe('Book', function() {
 		expect(order.quantity).is.eq(qty_buy.sub(qty_sell))
 		expect(order.issuer).is.eq(client1.address)
 		expect(order.price).is.eq(p(3))
-		expect(order.alive).is.true
+		expect(order.alive).is.eq(1)
 	})
 
 	it('Trigger partial sell, reach limit', async () => {
@@ -301,7 +301,7 @@ describe('Book', function() {
 		expect(buy_order.quantity).is.eq(qty_buy)
 		expect(buy_order.issuer).is.eq(client1.address)
 		expect(buy_order.price).is.eq(p(2))
-		expect(buy_order.alive).is.true
+		expect(buy_order.alive).is.eq(1)
 
 		const sell_order_id = await book.bid_order(0, 0)
 
@@ -309,7 +309,7 @@ describe('Book', function() {
 		expect(sell_order.quantity).is.eq(qty_sell.sub(qty_buy).sub(qty_buy))
 		expect(sell_order.issuer).is.eq(client2.address)
 		expect(sell_order.price).is.eq(p(3))
-		expect(sell_order.alive).is.true
+		expect(sell_order.alive).is.eq(1)
 	})
 
 	it('Forbid cancellation', async () => {
@@ -337,7 +337,7 @@ describe('Book', function() {
 			.withArgs(order_id)
 
 		const order = await book.get_order(order_id)
-		expect(order.alive).is.false
+		expect(order.alive).to.eq(0)
 	})
 
 	it('Cancel order and no hit', async () => {
@@ -351,7 +351,7 @@ describe('Book', function() {
 		await client1_market.cancel(book.address, order_id)
 
 		const order = await book.get_order(order_id)
-		expect(order.alive).is.false
+		expect(order.alive).to.eq(0)
 
 		await expect(client2_market.sell(book.address, qty, px, max_gas))
 			.not.to.emit(book, 'Hit')

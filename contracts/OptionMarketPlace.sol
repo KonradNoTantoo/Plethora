@@ -5,27 +5,182 @@ pragma experimental ABIEncoderV2;
 import "CoveredOption.sol";
 
 
-contract OptionMarketPlace is IMarketPlace {
+contract CoveredEthCallBook is CoveredEthCall, IBookOwner {
+	IBook public _book;
+
+	constructor(
+			IERC20 erc20_minter
+		,	uint strike_per_underlying_unit
+		,	uint expiry
+		,	IBookFactory factory
+		,	uint order_quantity_unit
+		) public
+		CoveredEthCall(erc20_minter, strike_per_underlying_unit, expiry)
+	{
+		_book = factory.create(order_quantity_unit);
+	}
+
+	function buy(uint quantity, uint price) external returns(IBook.Status order_status) {
+		require( false == _is_expired() );
+
+		IBook.Result memory result = _book.buy(msg.sender, quantity, price);
+
+		if ( result.status == IBook.Status.PARTIAL_EXEC )
+		{
+			_erc20_minter.transferFrom(msg.sender, address(this),
+				PriceLib.nominal_value(result.order.quantity, result.order.price));
+		} else if ( result.status == IBook.Status.BOOKED ) {
+			_erc20_minter.transferFrom(msg.sender, address(this),
+				PriceLib.nominal_value(quantity, price));
+		}
+
+		return result.status;
+	}
+
+	function sell(uint quantity, uint price) external payable returns(IBook.Status order_status) {
+		uint free_quantity = _nominal_shares[msg.sender] - _locked_shares[msg.sender];
+
+		if ( free_quantity < quantity )
+		{
+			uint missing_quantity = quantity - free_quantity;
+			require( msg.value == missing_quantity );
+			_emit_shares_for_self(msg.sender, missing_quantity);
+		}
+
+		_lock(msg.sender, quantity);
+		return _book.sell(msg.sender, quantity, price).status;
+	}
+
+	function on_buy_execution(IBook.Execution calldata execution) external {
+		require( msg.sender == address(_book) );
+		_transfer_locked(execution.seller, execution.buyer, execution.quantity);
+		_erc20_minter.transferFrom(execution.buyer, execution.seller,
+			PriceLib.nominal_value(execution.quantity, execution.price));
+	}
+
+	function on_sell_execution(IBook.Execution calldata execution) external {
+		require( msg.sender == address(_book) );
+		_transfer_locked(execution.seller, execution.buyer, execution.quantity);
+		_erc20_minter.transfer(execution.seller,
+			PriceLib.nominal_value(execution.quantity, execution.price));
+	}
+
+	function cancel(bytes32 order_id) external {
+		IBook.Order memory order = _book.cancel(msg.sender, order_id);
+
+		if( order.is_buy != 0 )
+		{
+			_erc20_minter.transfer(msg.sender,
+				PriceLib.nominal_value(order.quantity, order.price));
+		}
+		else
+		{
+			_unlock(msg.sender, order.quantity);
+		}
+	}
+
+	function liquidate(address payable liquidator) external {
+		_book.clear();
+		_liquidate(liquidator);
+	}
+}
+
+
+contract CoveredEthPutBook is CoveredEthCall, IBookOwner
+{
+	IBook public _book;
+
+	constructor(
+			IERC20 erc20_minter
+		,	uint strike_per_underlying_unit
+		,	uint expiry
+		,	IBookFactory factory
+		,	uint order_quantity_unit
+		) public
+		CoveredEthCall(erc20_minter, strike_per_underlying_unit, expiry)
+	{
+		_book = factory.create(order_quantity_unit);
+	}
+
+	function buy(uint quantity, uint price) external returns(IBook.Status order_status) {
+		require( false == _is_expired() );
+
+		IBook.Result memory result = _book.buy(msg.sender, quantity, price);
+
+		if ( result.status == IBook.Status.PARTIAL_EXEC )
+		{
+			_erc20_minter.transferFrom(msg.sender, address(this),
+				PriceLib.nominal_value(result.order.quantity, result.order.price));
+		} else if ( result.status == IBook.Status.BOOKED ) {
+		 	_erc20_minter.transferFrom(msg.sender, address(this),
+		 		PriceLib.nominal_value(quantity, price));
+		}
+
+		return IBook.Status.BOOKED;
+	}
+
+	function sell(uint quantity, uint price) external returns(IBook.Status order_status) {
+		uint free_quantity = _nominal_shares[msg.sender] - _locked_shares[msg.sender];
+
+		if ( free_quantity < quantity )
+		{
+			uint missing_quantity = quantity - free_quantity;
+			_erc20_minter.transferFrom(msg.sender, address(this),
+				PriceLib.nominal_value(missing_quantity, _strike_per_underlying_unit));
+			_emit_shares_for_self(msg.sender, missing_quantity);
+		}
+
+		_lock(msg.sender, quantity);
+		return _book.sell(msg.sender, quantity, price).status;
+	}
+
+	function on_buy_execution(IBook.Execution calldata execution) external {
+		require( msg.sender == address(_book) );
+		_transfer_locked(execution.seller, execution.buyer, execution.quantity);
+		_erc20_minter.transferFrom(execution.buyer, execution.seller,
+			PriceLib.nominal_value(execution.quantity, execution.price));
+	}
+
+	function on_sell_execution(IBook.Execution calldata execution) external {
+		require( msg.sender == address(_book) );
+		_transfer_locked(execution.seller, execution.buyer, execution.quantity);
+		_erc20_minter.transfer(execution.seller,
+			PriceLib.nominal_value(execution.quantity, execution.price));
+	}
+
+	function cancel(bytes32 order_id) external {
+		IBook.Order memory order = _book.cancel(msg.sender, order_id);
+
+		if( order.is_buy != 0 )
+		{
+			_erc20_minter.transfer(msg.sender,
+				PriceLib.nominal_value(order.quantity, order.price));
+		}
+		else
+		{
+			_unlock(msg.sender, order.quantity);
+		}
+	}
+
+	function liquidate(address payable liquidator) external {
+		_book.clear();
+		_liquidate(liquidator);
+	}
+}
+
+
+contract OptionMarketPlace {
 	event BookOpened(address book_address, uint expiry, uint strike);
 	event BookClosed(address book_address);
 
 	uint constant MINIMUM_TRADING_TIME = 1 days;
-	uint constant BOOK_OPENING_FEE = 1 finney;
-	uint constant BOOK_CLOSE_DELAY = 100 days;
+	uint constant BOOK_OPENING_FEE = 10 finney;
 
 	IERC20 public _pricing_token_vault;
-	IBookFactory public _book_factory; 
-	address private _current_order_book;
+	IBookFactory public _book_factory;
 
-	struct BookData {
-		uint strike_per_underlying_unit;
-		uint expiry;
-	}
-
-	SmartOptionEthVsERC20[] _options;
-	// expiry => strike => IBook
-	mapping(uint => mapping(uint => IBook)) public _books;
-	mapping(address => BookData) public _book_data;
+	// strike => expiry => address
+	mapping(uint => mapping(uint => address)) public _books;
 	address[] public _book_addresses;
 
 	constructor(address pricing_token_vault, address book_factory) public {
@@ -34,226 +189,83 @@ contract OptionMarketPlace is IMarketPlace {
 	}
 
 	function get_book_address(uint expiry, uint strike_per_underlying_unit) external view returns(address book) {
-		return address(_books[expiry][strike_per_underlying_unit]);
+		return address(_books[strike_per_underlying_unit][expiry]);
 	}
 
-	function nb_books() external view returns(uint number) {
+	function nb_books() external view returns(uint number_of_options) {
 		return _book_addresses.length;
 	}
 
-	function buy(address book_address, uint quantity, uint price) external returns(IBook.Status order_status) {
-		BookData memory data = _book_data[book_address];
-		require(data.expiry > now);
-
-		IBook book = IBook(book_address);
-		_current_order_book = book_address;
-		IBook.Result memory result = book.buy(msg.sender, quantity, price, bytes20(0));
-		_current_order_book = address(0);
-
-		if ( result.status == IBook.Status.PARTIAL_EXEC )
-		{
-			_pricing_token_vault.transferFrom(msg.sender, address(this),
-				PriceLib.nominal_value(result.order.quantity, result.order.price));
-		} else if ( result.status == IBook.Status.BOOKED ) {
-			_pricing_token_vault.transferFrom(msg.sender, address(this),
-				PriceLib.nominal_value(quantity, price));
-		}
-
-		return result.status;
-	}
-
-	function sell_contract(address book_address, SmartOptionEthVsERC20 option_contract, uint quantity, uint price) internal returns(IBook.Status order_status) {
-		IBook book = IBook(book_address);
-		option_contract.lock(msg.sender, quantity);
-		_current_order_book = book_address;
-		IBook.Status status = book.sell(msg.sender, quantity, price, bytes20(address(option_contract))).status;
-		_current_order_book = address(0);
-		return status;
-	}
-
-	function on_dead_order(IBook.Order memory order) internal {
-		if(order.user_data != bytes20(0))
-		{
-			SmartOptionEthVsERC20(address(order.user_data)).unlock(order.issuer, order.quantity);
-		}
-		else
-		{
-			_pricing_token_vault.transfer(order.issuer,
-				PriceLib.nominal_value(order.quantity, order.price));
-		}
-	}
-
-	function cancel(address book_address, bytes32 order_id) external {
-		BookData memory data = _book_data[book_address];
-		require(data.expiry > 0);
-		on_dead_order( IBook(book_address).cancel(msg.sender, order_id) );
-	}
-
-	function on_buy_execution(bytes20 hit_user_data, bytes20 order_user_data, IBook.Execution calldata execution) external {
-		require(msg.sender == _current_order_book
-			&&	hit_user_data != bytes20(0)
-			&&	order_user_data == bytes20(0)
-			);
-		SmartOptionEthVsERC20(address(hit_user_data))
-			.transferLocked(execution.seller, execution.buyer, execution.quantity);
-		_pricing_token_vault.transferFrom(execution.buyer, execution.seller,
-			PriceLib.nominal_value(execution.quantity, execution.price));
-	}
-
-	function on_sell_execution(bytes20 hit_user_data, bytes20 order_user_data, IBook.Execution calldata execution) external {
-		require(msg.sender == _current_order_book
-			&&	hit_user_data == bytes20(0)
-			&&	order_user_data != bytes20(0)
-			);
-		SmartOptionEthVsERC20(address(order_user_data))
-			.transferLocked(execution.seller, execution.buyer, execution.quantity);
-		_pricing_token_vault.transfer(execution.seller,
-			PriceLib.nominal_value(execution.quantity, execution.price));
-	}
-
-	function on_expired(IBook.Order calldata order) external {
-		require(msg.sender == _current_order_book);
-		on_dead_order(order);
-	}
-
-	function open_book(
-			uint expiry
-		,	uint strike_per_underlying_unit
-		,	uint order_quantity_unit
-	) external payable {
-		require(address(0) == address(_books[expiry][strike_per_underlying_unit])
+	function _open_book(uint expiry, uint strike_per_underlying_unit, SmartOptionEthVsERC20 option) internal {
+		require(
+				address(0) == _books[strike_per_underlying_unit][expiry]
 			&&	expiry >= (now + MINIMUM_TRADING_TIME)
-			&&	strike_per_underlying_unit > 0
-			&&	msg.value == BOOK_OPENING_FEE
 			);
 
-		IBook book = _book_factory.create(order_quantity_unit);
-		_books[expiry][strike_per_underlying_unit] = book;
-		address book_address = address(book);
-		BookData storage data = _book_data[book_address];
-		data.strike_per_underlying_unit = strike_per_underlying_unit;
-		data.expiry = expiry;
-		_book_addresses.push(book_address);
-		emit BookOpened(book_address, expiry, strike_per_underlying_unit);
+		_books[strike_per_underlying_unit][expiry] = address(option);
+		_book_addresses.push( address(option) );
+		emit BookOpened(address(option), expiry, strike_per_underlying_unit);
 	}
 
-	function roll_book(address book_address, uint expiry) external {
-		require(expiry >= (now + MINIMUM_TRADING_TIME));
-		BookData storage data = _book_data[book_address];
-		IBook book = _books[data.expiry][data.strike_per_underlying_unit];
-		
-		require(data.expiry < now
-			&&	book_address == address(book)
-			&&	address(0) == address(_books[expiry][data.strike_per_underlying_unit]));
-		
-		delete _books[data.expiry][data.strike_per_underlying_unit];
-		_books[expiry][data.strike_per_underlying_unit] = book;
-		book.clear();
-		
-		emit BookOpened(book_address, expiry, data.strike_per_underlying_unit);
-	}
+	function _close_book(uint expiry, uint strike_per_underlying_unit) internal returns(address book) {
+		address book_address = _books[strike_per_underlying_unit][expiry];
+		require( address(0) != book_address );
 
-	function close_book(address book_address) external {
-		BookData memory data = _book_data[book_address];
-		
-		require(data.expiry + BOOK_CLOSE_DELAY < now && data.expiry != 0);
-
-        IBook book = _books[data.expiry][data.strike_per_underlying_unit];
-		delete _books[data.expiry][data.strike_per_underlying_unit];
-		delete _book_data[book_address];
-		book.clear();
-
+		delete _books[strike_per_underlying_unit][expiry];
 		msg.sender.transfer(BOOK_OPENING_FEE);
 		emit BookClosed(book_address);
+		return book_address;
 	}
 }
 
 
 contract CallMarketPlace is OptionMarketPlace {
-	event CallEmission(address writer, address option);
-
 	constructor(address pricing_token_vault, address book_factory) public
 		OptionMarketPlace(pricing_token_vault, book_factory) {}
 
-	function sell(address book_address, uint price) external payable returns(IBook.Status order_status) {
-		BookData memory data = _book_data[book_address];
-		require(data.expiry > now);
-		SmartOptionEthVsERC20 option = (new CoveredEthCall).value(msg.value)(
-				_pricing_token_vault
-			,	data.strike_per_underlying_unit
-			,	data.expiry
-			,	msg.sender
-			,	msg.sender
-			);
-		_options.push(option);
-		emit CallEmission(msg.sender, address(option));
-		return sell_contract(
-				book_address
-			,	option
-			,	msg.value
-			,	price);
+	function open_book(uint expiry, uint strike_per_underlying_unit, uint order_quantity_unit) external payable {
+		require( msg.value == BOOK_OPENING_FEE );
+		_open_book(
+				expiry
+			,	strike_per_underlying_unit
+			,	new CoveredEthCallBook(
+					_pricing_token_vault
+				,	strike_per_underlying_unit
+				,	expiry
+				,	_book_factory
+				,	order_quantity_unit
+			)
+		);
 	}
 
-	function sell_secondary(address book_address, uint quantity, uint price, address option_address) external returns(IBook.Status order_status) {
-		CoveredEthCall option_contract = CoveredEthCall(option_address);
-		BookData memory data = _book_data[book_address];
-		require(data.expiry > now
-			&&	data.expiry == option_contract._expiry()
-			&&	data.strike_per_underlying_unit == option_contract._strike_per_underlying_unit()
-			&&	address(this) == option_contract._issuer()
-			&&	option_contract.balanceOf(msg.sender) >= quantity
-			);
-		return sell_contract(
-				book_address
-			,	option_contract
-			,	quantity
-			,	price);
+	function close_book(uint expiry, uint strike_per_underlying_unit) external {
+		address closed_book = _close_book(expiry, strike_per_underlying_unit);
+		CoveredEthCallBook(closed_book).liquidate(msg.sender);
 	}
 }
 
 
 contract PutMarketPlace is OptionMarketPlace {
-	event PutEmission(address writer, address option);
-
 	constructor(address pricing_token_vault, address book_factory) public
 		OptionMarketPlace(pricing_token_vault, book_factory) {}
 
-	function sell(address book_address, uint quantity, uint price) external payable returns(IBook.Status order_status) {
-		BookData memory data = _book_data[book_address];
-		require(data.expiry > now);
-		CoveredEthPut option = new CoveredEthPut(
-				_pricing_token_vault
-			,	quantity
-			,	data.strike_per_underlying_unit
-			,	data.expiry
-			,	msg.sender
-			,	msg.sender
-			);
-		_pricing_token_vault.transferFrom(msg.sender, address(option),
-			PriceLib.nominal_value(quantity, data.strike_per_underlying_unit));
-		option.activate();
-		_options.push(option);
-		emit PutEmission(msg.sender, address(option));
-		return sell_contract(
-				book_address
-			,	option
-			,	quantity
-			,	price);
+	function open_book(uint expiry, uint strike_per_underlying_unit, uint order_quantity_unit) external payable {
+		require( msg.value == BOOK_OPENING_FEE );
+		_open_book(
+				expiry
+			,	strike_per_underlying_unit
+			,	new CoveredEthPutBook(
+					_pricing_token_vault
+				,	strike_per_underlying_unit
+				,	expiry
+				,	_book_factory
+				,	order_quantity_unit
+			)
+		);
 	}
 
-	function sell_secondary(address book_address, uint quantity, uint price, address option_address) external returns(IBook.Status order_status) {
-		CoveredEthPut option_contract = CoveredEthPut(option_address);
-		BookData memory data = _book_data[book_address];
-		require(option_contract.getStatus() == SmartOptionEthVsERC20.Status.RUNNING
-			&&	data.expiry == option_contract._expiry()
-			&&	data.strike_per_underlying_unit == option_contract._strike_per_underlying_unit()
-			&&	address(this) == option_contract._issuer()
-			&&	option_contract.balanceOf(msg.sender) >= quantity
-			);
-		return sell_contract(
-				book_address
-			,	option_contract
-			,	quantity
-			,	price);
+	function close_book(uint expiry, uint strike_per_underlying_unit) external {
+		address closed_book = _close_book(expiry, strike_per_underlying_unit);
+		CoveredEthPutBook(closed_book).liquidate(msg.sender);
 	}
 }
