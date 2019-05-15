@@ -104,7 +104,7 @@ describe('CallMarketPlace', function() {
 		expect(await token.balanceOf(client1.address)).is.eq(0)
 
 		const order_id = await book.ask_order(0, 0)
-		const order = await book.get_order(order_id)
+		const order = await book._orders(order_id)
 		expect(order.is_buy).to.eq(1)
 	})
 
@@ -119,7 +119,7 @@ describe('CallMarketPlace', function() {
 
 		await client1_book.sell(qty, px, gas_and_value)
 		const order_id = await book.bid_order(0, 0)
-		const order = await book.get_order(order_id)
+		const order = await book._orders(order_id)
 		expect(order.is_buy).to.eq(0)
 	})
 
@@ -138,7 +138,7 @@ describe('CallMarketPlace', function() {
 		await client1_book.sell(sell_qty, sell_px, gas_and_value)
 
 		const order_id = await book.bid_order(0, 0)
-		const order = await book.get_order(order_id)
+		const order = await book._orders(order_id)
 		expect(order.is_buy).to.eq(0)
 
 		await mint_and_approve(client2, buy_nominal)
@@ -176,11 +176,11 @@ describe('CallMarketPlace', function() {
 		await client2_book.sell(sell_qty, sell_px_2, gas_and_value)
 
 		const sell_order_id_2 = await book.bid_order(0, 0)
-		const sell_order_2 = await book.get_order(sell_order_id_2)
+		const sell_order_2 = await book._orders(sell_order_id_2)
 		expect(sell_order_2.is_buy).to.eq(0)
 
 		const sell_order_id_1 = await book.bid_order(1, 0)
-		const sell_order_1 = await book.get_order(sell_order_id_1)
+		const sell_order_1 = await book._orders(sell_order_id_1)
 		expect(sell_order_1.is_buy).to.eq(0)
 
 		await mint_and_approve(client3, buy_nominal)
@@ -218,7 +218,7 @@ describe('CallMarketPlace', function() {
 		await client1_book.sell(sell_qty, sell_px, gas_and_value)
 
 		const order_id = await book.bid_order(0, 0)
-		const order = await book.get_order(order_id)
+		const order = await book._orders(order_id)
 		expect(order.is_buy).to.eq(0)
 
 		await mint_and_approve(client2, buy_nominal)
@@ -249,7 +249,7 @@ describe('CallMarketPlace', function() {
 		await client1_book.sell(sell_qty, sell_px, gas_and_value)
 
 		const order_id = await book.bid_order(0, 0)
-		const order = await book.get_order(order_id)
+		const order = await book._orders(order_id)
 		expect(order.is_buy).to.eq(0)
 
 		await mint_and_approve(client2, buy_nominal)
@@ -451,7 +451,7 @@ describe('PutMarketPlace', function() {
 		expect(await token.balanceOf(client1.address)).is.eq(0)
 
 		const order_id = await book.ask_order(0, 0)
-		const order = await book.get_order(order_id)
+		const order = await book._orders(order_id)
 		expect(order.is_buy).to.eq(1)
 	})
 
@@ -468,7 +468,7 @@ describe('PutMarketPlace', function() {
 		expect(await option_book.balanceOf(client1.address)).is.eq(qty)
 
 		const order_id = await book.bid_order(0, 0)
-		const order = await book.get_order(order_id)
+		const order = await book._orders(order_id)
 		expect(order.is_buy).to.eq(0)
 	})
 

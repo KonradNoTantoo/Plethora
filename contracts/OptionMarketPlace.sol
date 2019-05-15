@@ -20,24 +20,21 @@ contract CoveredEthCallBook is CoveredEthCall, IBookOwner {
 		_book = factory.create(order_quantity_unit);
 	}
 
-	function buy(uint quantity, uint price) external returns(IBook.Status order_status) {
+	function buy(uint quantity, uint price) external {
 		require( false == _is_expired() );
 
-		IBook.Result memory result = _book.buy(msg.sender, quantity, price);
+		uint remaining_quantity = _book.buy(msg.sender, quantity, price);
 
-		if ( result.status == IBook.Status.PARTIAL_EXEC )
+		if ( remaining_quantity > 0 )
 		{
 			_erc20_minter.transferFrom(msg.sender, address(this),
-				PriceLib.nominal_value(result.order.quantity, result.order.price));
-		} else if ( result.status == IBook.Status.BOOKED ) {
-			_erc20_minter.transferFrom(msg.sender, address(this),
-				PriceLib.nominal_value(quantity, price));
+				PriceLib.nominal_value(remaining_quantity, price));
 		}
-
-		return result.status;
 	}
 
-	function sell(uint quantity, uint price) external payable returns(IBook.Status order_status) {
+	function sell(uint quantity, uint price) external payable {
+		require( false == _is_expired() );
+
 		uint free_quantity = _nominal_shares[msg.sender] - _locked_shares[msg.sender];
 
 		if ( free_quantity < quantity )
@@ -48,21 +45,21 @@ contract CoveredEthCallBook is CoveredEthCall, IBookOwner {
 		}
 
 		_lock(msg.sender, quantity);
-		return _book.sell(msg.sender, quantity, price).status;
+		_book.sell(msg.sender, quantity, price);
 	}
 
-	function on_buy_execution(IBook.Execution calldata execution) external {
+	function on_buy_execution(address buyer, address seller, uint quantity, uint price) external {
 		require( msg.sender == address(_book) );
-		_transfer_locked(execution.seller, execution.buyer, execution.quantity);
-		_erc20_minter.transferFrom(execution.buyer, execution.seller,
-			PriceLib.nominal_value(execution.quantity, execution.price));
+		_transfer_locked(seller, buyer, quantity);
+		_erc20_minter.transferFrom(buyer, seller,
+			PriceLib.nominal_value(quantity, price));
 	}
 
-	function on_sell_execution(IBook.Execution calldata execution) external {
+	function on_sell_execution(address buyer, address seller, uint quantity, uint price) external {
 		require( msg.sender == address(_book) );
-		_transfer_locked(execution.seller, execution.buyer, execution.quantity);
-		_erc20_minter.transfer(execution.seller,
-			PriceLib.nominal_value(execution.quantity, execution.price));
+		_transfer_locked(seller, buyer, quantity);
+		_erc20_minter.transfer(seller,
+			PriceLib.nominal_value(quantity, price));
 	}
 
 	function cancel(bytes32 order_id) external {
@@ -102,24 +99,21 @@ contract CoveredEthPutBook is CoveredEthCall, IBookOwner
 		_book = factory.create(order_quantity_unit);
 	}
 
-	function buy(uint quantity, uint price) external returns(IBook.Status order_status) {
+	function buy(uint quantity, uint price) external {
 		require( false == _is_expired() );
 
-		IBook.Result memory result = _book.buy(msg.sender, quantity, price);
+		uint remaining_quantity = _book.buy(msg.sender, quantity, price);
 
-		if ( result.status == IBook.Status.PARTIAL_EXEC )
+		if ( remaining_quantity > 0 )
 		{
 			_erc20_minter.transferFrom(msg.sender, address(this),
-				PriceLib.nominal_value(result.order.quantity, result.order.price));
-		} else if ( result.status == IBook.Status.BOOKED ) {
-		 	_erc20_minter.transferFrom(msg.sender, address(this),
-		 		PriceLib.nominal_value(quantity, price));
+				PriceLib.nominal_value(remaining_quantity, price));
 		}
-
-		return IBook.Status.BOOKED;
 	}
 
-	function sell(uint quantity, uint price) external returns(IBook.Status order_status) {
+	function sell(uint quantity, uint price) external {
+		require( false == _is_expired() );
+
 		uint free_quantity = _nominal_shares[msg.sender] - _locked_shares[msg.sender];
 
 		if ( free_quantity < quantity )
@@ -131,21 +125,21 @@ contract CoveredEthPutBook is CoveredEthCall, IBookOwner
 		}
 
 		_lock(msg.sender, quantity);
-		return _book.sell(msg.sender, quantity, price).status;
+		_book.sell(msg.sender, quantity, price);
 	}
 
-	function on_buy_execution(IBook.Execution calldata execution) external {
+	function on_buy_execution(address buyer, address seller, uint quantity, uint price) external {
 		require( msg.sender == address(_book) );
-		_transfer_locked(execution.seller, execution.buyer, execution.quantity);
-		_erc20_minter.transferFrom(execution.buyer, execution.seller,
-			PriceLib.nominal_value(execution.quantity, execution.price));
+		_transfer_locked(seller, buyer, quantity);
+		_erc20_minter.transferFrom(buyer, seller,
+			PriceLib.nominal_value(quantity, price));
 	}
 
-	function on_sell_execution(IBook.Execution calldata execution) external {
+	function on_sell_execution(address buyer, address seller, uint quantity, uint price) external {
 		require( msg.sender == address(_book) );
-		_transfer_locked(execution.seller, execution.buyer, execution.quantity);
-		_erc20_minter.transfer(execution.seller,
-			PriceLib.nominal_value(execution.quantity, execution.price));
+		_transfer_locked(seller, buyer, quantity);
+		_erc20_minter.transfer(seller,
+			PriceLib.nominal_value(quantity, price));
 	}
 
 	function cancel(bytes32 order_id) external {

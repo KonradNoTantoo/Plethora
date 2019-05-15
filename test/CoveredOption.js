@@ -35,9 +35,9 @@ describe('CoveredEthCall', function() {
 
 	beforeEach(async () => {
 		token = await deployContract(admin, Plethora, [])
-		await token.mintFor(client1.address, nb_tokens)
-
 		call = await deployContract(admin, CoveredEthCall, [token.address, adjust_price(strike), in_one_second()], max_gas)
+
+		await token.mintFor(client1.address, nb_tokens)
 
 		const override = {
 			gasLimit: MAX_GAS,
@@ -123,9 +123,9 @@ describe('CoveredEthPut', function() {
 
 	beforeEach(async () => {
 		token = await deployContract(admin, Plethora, [])
-		await token.mintFor(writer1.address, nb_tokens)
-
 		put = await deployContract(admin, CoveredEthPut, [token.address, adjust_price(strike), in_one_second()], max_gas)
+
+		await token.mintFor(writer1.address, nb_tokens)
 
 		const tokenFromWriter1 = token.connect(writer1)
 		await tokenFromWriter1.approve(put.address, nb_tokens)

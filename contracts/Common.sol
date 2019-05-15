@@ -17,10 +17,7 @@ library PriceLib {
 
 
 interface IBook {
-	enum Status { BOOKED, PARTIAL_EXEC, FULL_EXEC }
-
 	struct Order {
-		uint time;
 		uint quantity;
 		uint price;
 		address issuer;
@@ -28,26 +25,16 @@ interface IBook {
 		uint128 is_buy;
 	}
 
-	struct Result {
-		Status status;
-		Order order;
-	}
-
 	struct Execution {
-		uint time;
 		uint price;
 		uint quantity;
 		address buyer;
 		address seller;
 	}
 
-	function last_execution() external view returns(Execution memory last);
+	function sell(address issuer, uint quantity, uint price) external returns(uint remaining_quantity);
 
-	function get_order(bytes32 order_id) external view returns(Order memory gotten);
-
-	function sell(address issuer, uint quantity, uint price) external returns(Result memory result);
-
-	function buy(address issuer, uint quantity, uint price) external returns(Result memory result);
+	function buy(address issuer, uint quantity, uint price) external returns(uint remaining_quantity);
 
 	function cancel(address issuer, bytes32 order_id) external returns(Order memory order);
 
@@ -61,6 +48,6 @@ interface IBookFactory {
 
 
 interface IBookOwner {
-	function on_buy_execution(IBook.Execution calldata execution) external;
-	function on_sell_execution(IBook.Execution calldata execution) external;
+	function on_buy_execution(address buyer, address seller, uint quantity, uint price) external;
+	function on_sell_execution(address buyer, address seller, uint quantity, uint price) external;
 }

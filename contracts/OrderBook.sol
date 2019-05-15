@@ -8,7 +8,6 @@ import "Common.sol";
 contract Book is IBook {
 	event BuyOrder(bytes32 id);
 	event SellOrder(bytes32 id);
-	event Expired(bytes32 id);
 	event Cancelled(bytes32 id);
 	event Hit(bytes32 hit_order, address buyer, address seller, uint price, uint quantity);
 
@@ -34,25 +33,8 @@ contract Book is IBook {
 		_owner = owner;
 	}
 
-	function _full_exec_result() internal pure returns(Result memory full_exec) {
-		Result memory result;
-		result.status = Status.FULL_EXEC;
-		return result;
-	}
-
-	function _in_book_result(Order memory order, bool partial_exec) internal pure returns(Result memory in_book) {
-		Result memory result;
-		result.status = partial_exec ? Status.PARTIAL_EXEC : Status.BOOKED;
-		result.order = order;
-		return result;
-	}
-
-	function last_execution() external view returns(Execution memory last) {
-		return _executions[_executions.length-1];
-	}
-
-	function get_order(bytes32 order_id) external view returns(Order memory gotten) {
-		return _orders[order_id];
+	function nb_executions() external view returns(uint nb) {
+		return _executions.length;
 	}
 
 	function bid_size() external view returns(uint size) {
@@ -88,10 +70,6 @@ contract Book is IBook {
 
 	function is_order_legal(uint quantity, uint price) external view returns(bool legal) {
 		return _is_order_legal(quantity, price);
-	}
-
-	function _compute_order_id(Order memory order) internal pure returns (bytes32 id) {
-		return keccak256(abi.encodePacked(order.time, order.issuer, order.price));
 	}
 
 	function _new_entry(Entry[] storage entries, uint index, int price, bytes32 order_id) internal {
@@ -130,12 +108,11 @@ contract Book is IBook {
 		_new_entry(entries, 0, price, order_id);
 	}
 
-	function sell(address issuer, uint quantity, uint price) external returns(Result memory result) {
+	function sell(address issuer, uint quantity, uint price) external returns(uint remaining_quantity) {
 		require( msg.sender == address(_owner) && _is_order_legal(quantity, price) );
 
-		uint time = now;
 		int signed_price = int(price);
-		uint remaining_quantity = quantity;
+		remaining_quantity = quantity;
 
 		for (uint i = _ask.length; i > 0; --i) {
 			Entry storage entry = _ask[i-1];
@@ -150,14 +127,13 @@ contract Book is IBook {
 
 				if ( o.alive == 1 ) {
 					Execution memory e;
-					e.time = time;
 					e.seller = issuer;
 					e.buyer = o.issuer;
 					e.price = uint(-entry.signed_price);
 
 					if ( o.quantity <= remaining_quantity ) {
 						e.quantity = o.quantity;
-						o.alive = 0;
+						delete _orders[order_id];
 					} else {
 						o.quantity -= remaining_quantity;
 						e.quantity = remaining_quantity;
@@ -166,11 +142,11 @@ contract Book is IBook {
 					remaining_quantity -= e.quantity;
 
 					_on_execution(order_id, e);
-					_owner.on_sell_execution(e);
+					_owner.on_sell_execution(e.buyer, issuer, e.quantity, e.price);
 				}
 
 				if (remaining_quantity == 0) {
-					return _full_exec_result();
+					return 0;
 				}
 			}
 
@@ -179,27 +155,23 @@ contract Book is IBook {
 		}
 
 		Order memory o;
-		o.time = time;
 		o.quantity = remaining_quantity;
 		o.price = price;
 		o.issuer = issuer;
 		o.alive = 1;
-		bytes32 order_id = _compute_order_id(o);
+		bytes32 order_id = keccak256(abi.encodePacked(now, issuer, price));
 		require(_orders[order_id].alive == 0); // avoid collision
 		_orders[order_id] = o;
 
 		_enter_order(_bid, signed_price, order_id);
 		emit SellOrder(order_id);
-
-		return _in_book_result(o, quantity != remaining_quantity);
 	}
 
-	function buy(address issuer, uint quantity, uint price) external returns(Result memory result) {
+	function buy(address issuer, uint quantity, uint price) external returns(uint remaining_quantity) {
 		require( msg.sender == address(_owner) && _is_order_legal(quantity, price) );
 
-		uint time = now;
 		int signed_price = int(price);
-		uint remaining_quantity = quantity;
+		remaining_quantity = quantity;
 
 		for (uint i = _bid.length; i > 0; --i) {
 			Entry storage entry = _bid[i-1];
@@ -214,14 +186,13 @@ contract Book is IBook {
 
 				if ( o.alive == 1 ) {
 					Execution memory e;
-					e.time = time;
 					e.seller = o.issuer;
 					e.buyer = issuer;
 					e.price = uint(entry.signed_price);
 
 					if ( o.quantity <= remaining_quantity ) {
 						e.quantity = o.quantity;
-						o.alive = 0;
+						delete _orders[order_id];
 					} else {
 						o.quantity -= remaining_quantity;
 						e.quantity = remaining_quantity;
@@ -230,11 +201,11 @@ contract Book is IBook {
 					remaining_quantity -= e.quantity;
 
 					_on_execution(order_id, e);
-					_owner.on_buy_execution(e);
+					_owner.on_buy_execution(issuer, e.seller, e.quantity, e.price);
 				}
 
 				if (remaining_quantity == 0) {
-					return _full_exec_result();
+					return 0;
 				}
 			}
 
@@ -243,31 +214,27 @@ contract Book is IBook {
 		}
 
 		Order memory o;
-		o.time = time;
 		o.quantity = remaining_quantity;
 		o.price = price;
 		o.issuer = issuer;
 		o.alive = 1;
 		o.is_buy = 1;
-		bytes32 order_id = _compute_order_id(o);
+		bytes32 order_id = keccak256(abi.encodePacked(now, issuer, price));
 		require(_orders[order_id].alive == 0); // avoid collision
 		_orders[order_id] = o;
 
 		_enter_order(_ask, -signed_price, order_id);
 		emit BuyOrder(order_id);
-
-		return _in_book_result(o, quantity != remaining_quantity);
 	}
 
 	function cancel(address issuer, bytes32 order_id) external returns(Order memory order) {
-		Order storage o = _orders[order_id];
+		order = _orders[order_id];
 		require(
-				o.alive == 1 && o.issuer == issuer
+				order.alive == 1 && order.issuer == issuer
 			&&	msg.sender == address(_owner)
 			);
-		o.alive = 0;
+		delete _orders[order_id];
 		emit Cancelled(order_id);
-		return o;
 	}
 
 	function clear() external {

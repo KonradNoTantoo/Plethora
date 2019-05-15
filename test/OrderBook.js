@@ -49,7 +49,7 @@ describe('Book', function() {
 			.to.emit(book, 'BuyOrder')
 		expect(await book.ask_size()).to.eq(1)
 		const order_id = await book.ask_order(0, 0)
-		const order = await book.get_order(order_id)
+		const order = await book._orders(order_id)
 		expect(order.quantity).is.eq(qty)
 		expect(order.issuer).is.eq(client1.address)
 		expect(order.price).is.eq(px)
@@ -62,7 +62,7 @@ describe('Book', function() {
 			.to.emit(book, 'SellOrder')
 		expect(await book.bid_size()).to.eq(1)
 		const order_id = await book.bid_order(0, 0)
-		const order = await book.get_order(order_id)
+		const order = await book._orders(order_id)
 		expect(order.quantity).is.eq(qty)
 		expect(order.issuer).is.eq(client1.address)
 		expect(order.price).is.eq(px)
@@ -83,14 +83,14 @@ describe('Book', function() {
 		expect(nb_entries).is.eq(2)
 
 		const order1_id = await book.bid_order(0, 0)
-		const order1 = await book.get_order(order1_id)
+		const order1 = await book._orders(order1_id)
 		expect(order1.quantity).is.eq(qty1)
 		expect(order1.issuer).is.eq(client1.address)
 		expect(order1.price).is.eq(px)
 		expect(order1.alive).is.eq(1)
 
 		const order2_id = await book.bid_order(0, 1)
-		const order2 = await book.get_order(order2_id)
+		const order2 = await book._orders(order2_id)
 		expect(order2.quantity).is.eq(qty2)
 		expect(order2.issuer).is.eq(client2.address)
 		expect(order2.price).is.eq(px)
@@ -118,7 +118,7 @@ describe('Book', function() {
 		expect(await book.bid_size()).to.eq(1)
 		expect(await book.ask_size()).to.eq(0)
 
-		const order = await book.get_order(order_id)
+		const order = await book._orders(order_id)
 		expect(order.quantity).is.eq(qty_sell.sub(qty_buy))
 		expect(order.issuer).is.eq(client1.address)
 		expect(order.price).is.eq(p(2))
@@ -147,7 +147,7 @@ describe('Book', function() {
 		expect(await book.ask_size()).to.eq(1)
 
 		const buy_order_id = await book.ask_order(0, 0)
-		const order = await book.get_order(buy_order_id)
+		const order = await book._orders(buy_order_id)
 		expect(order.quantity).is.eq(qty_buy.sub(qty_sell.mul(2)))
 		expect(order.issuer).is.eq(client2.address)
 		expect(order.price).is.eq(p(3))
@@ -205,7 +205,7 @@ describe('Book', function() {
 
 		const buy_order_id = await book.ask_order(0, 0)
 
-		const buy_order = await book.get_order(buy_order_id)
+		const buy_order = await book._orders(buy_order_id)
 		expect(buy_order.quantity).is.eq(qty_buy.sub(qty_sell).sub(qty_sell))
 		expect(buy_order.issuer).is.eq(client2.address)
 		expect(buy_order.price).is.eq(p(3))
@@ -213,7 +213,7 @@ describe('Book', function() {
 
 		const sell_order_id = await book.bid_order(0, 0)
 
-		const sell_order = await book.get_order(sell_order_id)
+		const sell_order = await book._orders(sell_order_id)
 		expect(sell_order.quantity).is.eq(qty_sell)
 		expect(sell_order.issuer).is.eq(client1.address)
 		expect(sell_order.price).is.eq(p(4))
@@ -240,7 +240,7 @@ describe('Book', function() {
 		expect(await book.bid_size()).to.eq(0)
 		expect(await book.ask_size()).to.eq(1)
 
-		const order = await book.get_order(order_id)
+		const order = await book._orders(order_id)
 		expect(order.quantity).is.eq(qty_buy.sub(qty_sell))
 		expect(order.issuer).is.eq(client1.address)
 		expect(order.price).is.eq(p(3))
@@ -297,7 +297,7 @@ describe('Book', function() {
 
 		const buy_order_id = await book.ask_order(0, 0)
 
-		const buy_order = await book.get_order(buy_order_id)
+		const buy_order = await book._orders(buy_order_id)
 		expect(buy_order.quantity).is.eq(qty_buy)
 		expect(buy_order.issuer).is.eq(client1.address)
 		expect(buy_order.price).is.eq(p(2))
@@ -305,7 +305,7 @@ describe('Book', function() {
 
 		const sell_order_id = await book.bid_order(0, 0)
 
-		const sell_order = await book.get_order(sell_order_id)
+		const sell_order = await book._orders(sell_order_id)
 		expect(sell_order.quantity).is.eq(qty_sell.sub(qty_buy).sub(qty_buy))
 		expect(sell_order.issuer).is.eq(client2.address)
 		expect(sell_order.price).is.eq(p(3))
@@ -336,7 +336,7 @@ describe('Book', function() {
 			.to.emit(book, "Cancelled")
 			.withArgs(order_id)
 
-		const order = await book.get_order(order_id)
+		const order = await book._orders(order_id)
 		expect(order.alive).to.eq(0)
 	})
 
@@ -350,7 +350,7 @@ describe('Book', function() {
 
 		await client1_market.cancel(book.address, order_id)
 
-		const order = await book.get_order(order_id)
+		const order = await book._orders(order_id)
 		expect(order.alive).to.eq(0)
 
 		await expect(client2_market.sell(book.address, qty, px, max_gas))
