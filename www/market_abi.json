@@ -1,0 +1,180 @@
+[
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "_book_addresses",
+		"outputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "expiry",
+				"type": "uint256"
+			},
+			{
+				"name": "strike_per_underlying_unit",
+				"type": "uint256"
+			}
+		],
+		"name": "get_book_address",
+		"outputs": [
+			{
+				"name": "book",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "expiry",
+				"type": "uint256"
+			},
+			{
+				"name": "strike_per_underlying_unit",
+				"type": "uint256"
+			}
+		],
+		"name": "close_book",
+		"outputs": [],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "nb_books",
+		"outputs": [
+			{
+				"name": "number_of_options",
+				"type": "uint256"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [
+			{
+				"name": "",
+				"type": "uint256"
+			},
+			{
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "_books",
+		"outputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"constant": false,
+		"inputs": [
+			{
+				"name": "expiry",
+				"type": "uint256"
+			},
+			{
+				"name": "strike_per_underlying_unit",
+				"type": "uint256"
+			},
+			{
+				"name": "order_quantity_unit",
+				"type": "uint256"
+			}
+		],
+		"name": "open_book",
+		"outputs": [],
+		"payable": true,
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"constant": true,
+		"inputs": [],
+		"name": "_pricing_token_vault",
+		"outputs": [
+			{
+				"name": "",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"name": "pricing_token_vault",
+				"type": "address"
+			}
+		],
+		"payable": false,
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"name": "book_address",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"name": "expiry",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"name": "strike",
+				"type": "uint256"
+			}
+		],
+		"name": "BookOpened",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"name": "book_address",
+				"type": "address"
+			}
+		],
+		"name": "BookClosed",
+		"type": "event"
+	}
+]

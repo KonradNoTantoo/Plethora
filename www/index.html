@@ -13,100 +13,173 @@
 		<script src="https://cdn.ethers.io/scripts/ethers-v4.min.js"
 			charset="utf-8"
 			type="text/javascript"></script>
+		<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.7.8/angular.min.js"
+			charset="utf-8"
+			type="text/javascript"></script>
 		<script src="lib.js"
 			charset="utf-8"
 			type="text/javascript"></script>
 	</head>
 
-	<body>
+	<body data-ng-app="Plethora" data-ng-controller="main_ctrl">
 		<div id="intro">
 			<div id="intro-left">
 				<h3>Connection</h3>
 				<div id="connection-form">
 					<p>First, you need to connect your wallet provider:</p>
-					<p><button onclick="connect_metamask()">Metamask</button></p>
+					<p><button data-ng-click="connect_metamask()">Metamask</button></p>
 				</div>
 				<div id="connection-wait" class="wait"></div>
 			</div>
 			<div id="intro-right"></div>
 		</div>
-		<div id="header">Plethora</div>
+		<div id="header">Plethora <span class="on">on</span> <span class="network">{{ network }}</span></div>
 		<div id="books" class="column">
 			<div id="books-contents">
-				<div class="section">
-					<h3>Pinned books</h3>
-					<div>
-						<!-- input id="order-depth" type="number" value="10" min="1" /-->
-						<button onclick="refresh_pinned_books()">Refresh</button>
-					</div>
-					<div class="subsection">
-						<h4>Call</h4>
-						<div id="call-books-pinned"></div>
-					</div>
-					<div class="subsection">
-						<h4>Put</h4>
-						<div id="put-books-pinned"></div>
-					</div>
-				</div>
-				<div class="section">
+				<div class="section" data-ng-controller="books_ctrl">
 					<h3>Books</h3>
 					<div>
-						<input id="book-search-depth" type="number" value="10" min="1" />
-						<button onclick="refresh_known_books()">Refresh</button>
+						<input data-ng-model="search_depth" data-ng-change="refresh()" type="number" min="1">
 					</div>
 					<div class="subsection">
 						<h4>Call</h4>
-						<div id="call-books-known"></div>
+						<div>
+							<p data-ng-repeat="book in call_books" data-ng-class="[book.class,'book-label']">
+								{{ book.label }}
+								<button data-ng-click="pin_call(book)" class="book-button">Pin</button>
+							</p>
+						</div>
 					</div>
-					<div class="subsection">
+					<div class="subsection-right">
 						<h4>Put</h4>
-						<div id="put-books-known"></div>
+						<div>
+							<p data-ng-repeat="book in put_books" data-ng-class="[book.class,'book-label']">
+								{{ book.label }}
+								<button data-ng-click="pin_call(book)" class="book-button">Pin</button>
+							</p>
+						</div>
 					</div>
 				</div>
 				<div class="section">
 					<h3>Open book</h3>
-					<div id="openbook-form">
+					<form id="openbook-form" name="open_form" data-ng-controller="open_book_ctrl">
 						<dl class="form">
 							<dt></dt>
 							<dd>
-								<select id="openbook-type">
+								<select data-ng-model="type">
 									<option value="call">Call</option>
 									<option value="put">Put</option>
 								</select>
 							</dd>
 							<dt>Expiry:</dt>
-							<dd><input id="openbook-expiry" type="date"></dd>
+							<dd><input id="openbook-expiry" data-ng-model="expiry" type="date" min="{{ tomorrow | date:'yyyy-MM-dd' }}" required></dd>
 							<dt>DAI/ETH Strike:</dt>
-							<dd><input id="openbook-strike" type="number" step="0.125"></dd>
-							<dt>Minimum order quantity (ETH):</dt>
-							<dd><input id="openbook-minqty" type="number" step="0.0001" value="0.0001"></dd>
-							<dt>Order lifetime (hours):</dt>
-							<dd><input id="openbook-orderlife" type="number" step="1" min="24" value="24"></dd>
-							<dt></dt>
-							<dd><button onclick="open_book()">Open</button></dd>
+							<dd><input data-ng-model="strike" type="number" step="0.125" min="0.125" required></dd>
+							<dt>Order quantity unit (ETH):</dt>
+							<dd><input data-ng-model="quantity_unit" type="number" step="0.0001" min="0.0001" required></dd>
+							<dt data-ng-show="open_form.$valid">
+								<ul>
+									<li>Instrument: {{ type }}</li>
+									<li>Strike: <em>&#x2B19;/&#x29EB;{{ strike }}</em></li>
+									<li>Quanity unit: <em>&#x29EB;{{ quantity_unit }}</em></li>
+									<li>Expiry: <em>{{ expiry | date }}</em> at 14:00 UTC</li>
+								</ul>
+							</dt>
+							<dd data-ng-show="open_form.$valid">
+								<button data-ng-click="open()">Open</button>
+							</dd>
 						</dl>
-					</div>
+					</form>
 					<div id="openbook-wait" class="wait">
 					</div>
 				</div>
 			</div>
 		</div>
-		<div id="contracts" class="column">
-			<h2 class="title">Call</h2>
-			<div id="call-contents">
-			</div>
-			<h2 class="title">Put</h2>
-			<div id="put-contents">
+		<div id="pinned-books" class="column">
+			<div id="pinned-books-contents">
+				<div class="section" data-ng-controller="pinned_books_ctrl">
+					<h3>Pinned books</h3>
+					<div class="subsection">
+						<h4>Call</h4>
+						<div>
+							<div data-ng-repeat="book in call_books" class="book">
+								<h5 data-ng-bind="book.label" data-ng-class="book.class"></h5>
+								<h4 data-ng-bind="book.position | currency: '\u29EB': 2" class="position"></h4>
+								<div data-ng-if="book.alive">
+									<div class="bid">
+										<p>Bid</p>
+										<div id="{{ order.node_id }}" data-ng-repeat="order in book.bid" data-ng-class="order.class">
+											<button data-ng-click="cancel(order)" data-ng-show="order.class == 'owned-order'" class="order-cancel">X</button>
+											{{ order.quantity }}&nbsp;{{ order.price }}
+										</div>
+									</div>
+									<div class="ask">
+										<p>Ask</p>
+										<div id="{{ order.node_id }}" data-ng-repeat="order in book.ask" data-ng-class="order.class">
+											{{ order.price }}&nbsp;{{ order.quantity }}
+											<button data-ng-click="cancel(order)" data-ng-show="order.class == 'owned-order'" class="order-cancel">X</button>
+										</div>
+									</div>
+									<div data-ng-if="book.last" class="last"><strong>Last {{ book.last.price | currency: '\u2B19/\u29EB': 2 }}</strong><br><span>&#x29EB;{{ book.last.quantity }}<br>{{ book.last.time }}</span></div>
+									<form id="{{ book.id + '-order-form' }}" class="order-form">
+										<select data-ng-model="book.order.way" required="">
+											<option value="B">Buy</option>
+											<option value="S">Sell</option>
+										</select>
+										&#x29EB;<input data-ng-model="book.order.quantity" type="number" step="{{ book.quantity_unit }}" min="{{ book.quantity_unit }}" required="">@
+										&#x2B19;/&#x29EB;<input data-ng-model="book.order.price" type="number" step="0.125" min="0.125" required="">
+										<div data-ng-show="book.order.quantity !== undefined && book.order.price !== undefined && book.order.quantity >= book.quantity_unit && book.order.price >= 0.125">
+											<p>DAI nominal: {{ book.order.quantity * book.order.price | currency: '\u2B19': 2}}</p>
+											<button data-ng-click="place_order(book)">Place</button>
+										</div>
+									</form>
+									<div id="{{ book.id + '-order-wait' }}" class="wait"></div>
+								</div>
+							</div>
+						</div>
+					</div>
+					<div class="subsection-right">
+						<h4>Put</h4>
+						<div>
+							<div data-ng-repeat="book in put_books" class="book">
+								<h5 data-ng-bind="book.label" data-ng-class="book.class"></h5>
+								<h4 data-ng-bind="book.position | currency: '\u29EB': 2" class="position"></h4>
+								<div data-ng-if="book.alive">
+									<div class="bid">
+										<p>Bid</p>
+										<div id="{{ order.node_id }}" data-ng-repeat="order in book.bid" data-ng-class="order.class">
+											<button data-ng-click="cancel(order)" data-ng-show="order.class == 'owned-order'" class="order-cancel">X</button>
+											{{ order.quantity }}&nbsp;{{ order.price }}
+										</div>
+									</div>
+									<div class="ask">
+										<p>Ask</p>
+										<div id="{{ order.node_id }}" data-ng-repeat="order in book.ask" data-ng-class="order.class">
+											{{ order.price }}&nbsp;{{ order.quantity }}
+											<button data-ng-click="cancel(order)" data-ng-show="order.class == 'owned-order'" class="order-cancel">X</button>
+										</div>
+									</div>
+									<div data-ng-if="book.last" class="last"><strong>Last {{ book.last.price | currency: '\u2B19/\u29EB': 2 }}</strong><br><span>&#x29EB;{{ book.last.quantity }}<br>{{ book.last.time }}</span></div>
+									<form id="{{ book.id + '-order-form' }}" class="order-form">
+										<select data-ng-model="book.order.way" required="">
+											<option value="B">Buy</option>
+											<option value="S">Sell</option>
+										</select>
+										&#x29EB;<input data-ng-model="book.order.quantity" type="number" step="{{ book.quantity_unit }}" min="{{ book.quantity_unit }}" required="">@
+										&#x2B19;/&#x29EB;<input data-ng-model="book.order.price" type="number" step="0.125" min="0.125" required="">
+										<div data-ng-show="book.order.quantity !== undefined && book.order.price !== undefined && book.order.quantity >= book.quantity_unit && book.order.price >= 0.125">
+											<p>DAI nominal: {{ book.order.quantity * book.order.price | currency: '\u2B19': 2}}</p>
+											<button data-ng-click="place_order(book)">Place</button>
+										</div>
+									</form>
+									<div id="{{ book.id + '-order-wait' }}" class="wait"></div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
 			</div>
 		</div>
-		<div id="executions" class="column">
-			<h2 class="title">Executions</h2>
-			<div id="executions-contents">
-			</div>
-		</div>
-		<script
-			charset="utf-8"
-			type="text/javascript">initiatilize_view()</script>
 	</body>
 
 </html>

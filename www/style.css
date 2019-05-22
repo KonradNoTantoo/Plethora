@@ -15,6 +15,7 @@ body {
 	height: 100%;
 	float: left;
 	border-right: 1px solid gainsboro;
+	background-color: white;
 }
 
 #intro-left>h3 {
@@ -35,31 +36,38 @@ body {
 
 #header {
 	display: none;
-	position: absolute;
-	border-bottom: 1px solid gainsboro;
+	position: fixed;
+	background-color: white;
+	border-bottom: 2px solid gainsboro;
 	top: 0;
 	left: 0;
 	width: 100%;
 	height: 1.5em;
 	padding: 0.5em 0;
+	font-weight: bolder;
+	padding-left: 5em;
+}
+
+#header>.on {
+	font-weight: normal;
+	font-size: 80%;
+}
+
+#header>.network {
+	font-weight: normal;
 }
 
 #books {
 	display: none;
 	border-right: 1px solid gainsboro;
-	width: 50%;
+	width: 44%;
 	min-width: 40em;
 }
 
-#contracts {
+#pinned-books {
 	display: none;
-	border-right: 1px solid gainsboro;
-	width: 24%;
-}
-
-#executions {
-	display: none;
-	width: 24%;
+	width: 55%;
+	min-width: 55em;
 }
 
 .wait {
@@ -82,31 +90,58 @@ body {
 
 .section {
 	margin: 0 2em;
-	min-width: 40em;
+	min-width: 20em;
 	clear: both;
 }
 
 .section>h3 {
 	padding-top: 1em;
 	margin-bottom: 0.5em;
+	clear: both;
 }
 
 .subsection {
 	float: left;
-	min-width: 19em;
+	min-width: 9em;
 	margin: 0 0.5em;
 }
 
+.subsection-right {
+	float: right;
+	min-width: 9em;
+	margin: 0 0.5em;
+}
+
+.book-label {
+	font-size: 1em;
+	padding: 0.2em;
+	background-color: white;
+	border: 2px solid gainsboro;
+}
+
+.book-button {
+	font-size: 1em;
+	border: 1px solid grey;
+}
+
 .form {
-	width: 17em;
+	min-width: 17em;
+	max-width: 25em;
+	padding: 0.5em;
 	margin: 0 auto;
 	text-align: justify;
+	background-color: white;
+	border: 10px solid gainsboro;
 }
 
 .form>dt {
-	border-top: 1px solid gainsboro;
-	margin-top: 0.5em;
-	padding-top: 0.5em;
+	margin: 0 2em;
+}
+
+.form>dd {
+	margin: 0.5em 3em;
+	padding-bottom: 0.5em;
+	border-bottom: 1px solid gainsboro;
 }
 
 .expired-book {
@@ -125,18 +160,20 @@ body {
 	background-color: gainsboro;
 	margin: 0.5em 0;
 	padding: 0.5em 0.5em;
-	width: 18em;
+	width: 22em;
 }
 
 .book>h5 {
 	font-size: 120%;
+	margin: 0.2em 0.2em;
+	padding: 0.2em 0.3em;
 }
 
 .bid {
 	float: left;
-	margin: 0 0.2em;
-	padding: 0 0.3em;
-	width: 10em;
+	margin: 0 0 1em 1em;
+	padding: 0 0.5em;
+	width: 12em;
 	background-color: white;
 	text-align: right;
 	font-family: monospace;
@@ -145,13 +182,18 @@ body {
 .bid>p {
 	text-align: center;
 	font-family: sans-serif;
+	font-weight: bold;
+}
+
+.bid>div>.order-cancel {
+	float: left;
 }
 
 .ask {
-	float: left;
-	margin: 0 0.2em;
-	padding: 0 0.3em;
-	width: 10em;
+	float: right;
+	margin: 0 1em 1em 0;
+	padding: 0 0.5em;
+	width: 12em;
 	background-color: white;
 	text-align: left;
 	font-family: monospace;
@@ -160,6 +202,11 @@ body {
 .ask>p {
 	text-align: center;
 	font-family: sans-serif;
+	font-weight: bold;
+}
+
+.ask>div>.order-cancel {
+	float: right;
 }
 
 .owned-order {
@@ -167,10 +214,29 @@ body {
 	color: darkred;
 }
 
+.order-cancel {
+	font-size: 0.4em;
+	max-width: 0.4em;
+	border: 1px solid white;
+}
+
+.last {
+	clear:both;
+	margin: 1em;
+	padding: 0.5em;
+	background-color: white;
+}
+
+.last>span {
+	font-size: 80%;
+	color: dimgrey;
+}
+
 .order-form {
 	clear: both;
-	padding-top: 0.5em;
-	width: 18em;
+	margin: 1em;
+	padding: 0.5em;
+	background-color: white;
 }
 
 .order-form>input {
