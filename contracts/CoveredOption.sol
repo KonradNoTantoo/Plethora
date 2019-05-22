@@ -84,28 +84,38 @@ contract SmartOptionEthVsERC20 is IERC20 {
 		emit Transfer(from, to, nb_shares);
 	}
 
-	function _emit_shares_for_self(address writer, uint quantity) internal {
-		uint new_quantity = quantity + _underlying_quantity;
-		require(false == _is_expired()
-			&&	new_quantity >= quantity && new_quantity >= _underlying_quantity
-			&&	PriceLib.is_valid_nominal(new_quantity, _strike_per_underlying_unit)
-			);
-		_underlying_quantity = new_quantity;
-		_writers[writer] += quantity;
-		_nominal_shares[writer] += quantity;
-	}
-
 	function _emit_shares(address writer, address buyer, uint quantity) internal {
 		uint new_quantity = quantity + _underlying_quantity;
-		require(false == _is_expired()
-			&&	address(0) != buyer
-			&&	address(0) != writer
-			&&	new_quantity >= quantity && new_quantity >= _underlying_quantity
+		require(new_quantity >= quantity && new_quantity >= _underlying_quantity
 			&&	PriceLib.is_valid_nominal(new_quantity, _strike_per_underlying_unit)
 			);
 		_underlying_quantity = new_quantity;
 		_writers[writer] += quantity;
 		_nominal_shares[buyer] += quantity;
+	}
+
+	function _cross_shares(address writer) internal returns(uint crossed) {
+		uint written = _writers[writer];
+
+		if (written > 0)
+		{
+			uint crossable = _nominal_shares[writer] - _locked_shares[writer];
+
+			if (crossable < written)
+			{
+				_writers[writer] -= crossable;
+				_nominal_shares[writer] -= crossable;
+				_underlying_quantity -= crossable;
+				return crossable;
+			}
+
+			delete _writers[writer];
+			_nominal_shares[writer] -= written;
+			_underlying_quantity -= written;
+			return written;
+		}
+
+		return 0;
 	}
 
 	function _settle() internal returns(uint shares) {
@@ -150,6 +160,14 @@ contract SmartOptionEthVsERC20 is IERC20 {
 
 	function can_liquidate() external view returns(bool) {
 		return now >= _expiry + LIQUIDATION_DELAY && _status != Status.LIQUIDATED;
+	}
+
+	function can_exercise() external view returns(bool) {
+		return _is_expired() && now < _expiry + SETTLEMENT_DELAY;
+	}
+
+	function can_settle() external view returns(bool) {
+		return now >= _expiry + SETTLEMENT_DELAY && _status != Status.LIQUIDATED;
 	}
 
 	// ERC20 implementation
@@ -250,6 +268,9 @@ contract CoveredEthCall is SmartOptionEthVsERC20 {
 	}
 
 	function emit_shares(address writer, address buyer) external payable {
+		require(false == _is_expired()
+			&&	address(0) != buyer
+			&&	address(0) != writer);
 		_emit_shares(writer, buyer, msg.value);
 	}
 
@@ -266,6 +287,15 @@ contract CoveredEthCall is SmartOptionEthVsERC20 {
 		if ( unexercised_quantity > 0 ) {
 			msg.sender.transfer((balance*unexercised_quantity)/_underlying_quantity);
 		}
+	}
+
+	function _cross_call_shares(address payable guy) internal {
+		guy.transfer(_cross_shares(guy));
+	}
+
+	function cross_call_shares() external {
+		require(false == _is_expired());
+		_cross_call_shares(msg.sender);
 	}
 
 	// ERC20 implementation
@@ -294,11 +324,15 @@ contract CoveredEthPut is SmartOptionEthVsERC20 {
 	}
 
 	function emit_shares(address writer, address buyer, uint quantity) external {
-		require(_erc20_minter.transferFrom(
-			msg.sender,
-			address(this),
-			PriceLib.nominal_value(quantity, _strike_per_underlying_unit)
-			));
+		require(false == _is_expired()
+			&&	address(0) != buyer
+			&&	address(0) != writer
+			&&	_erc20_minter.transferFrom(
+					msg.sender,
+					address(this),
+					PriceLib.nominal_value(quantity, _strike_per_underlying_unit)
+				)
+			);
 		_emit_shares(writer, buyer, quantity);
 	}
 
@@ -315,6 +349,22 @@ contract CoveredEthPut is SmartOptionEthVsERC20 {
 			require(_erc20_minter.transfer(msg.sender,
 				PriceLib.nominal_value((balance*unexercised_quantity)/_underlying_quantity, _strike_per_underlying_unit)));
 		}
+	}
+
+	function _cross_put_shares(address guy) internal {
+		uint crossed = _cross_shares(guy);
+
+		if (crossed > 0) {
+			_erc20_minter.transfer(
+					guy,
+					PriceLib.nominal_value(crossed, _strike_per_underlying_unit)
+				);
+		}
+	}
+
+	function cross_put_shares() external {
+		require(false == _is_expired());
+		_cross_put_shares(msg.sender);
 	}
 
 	// ERC20 implementation

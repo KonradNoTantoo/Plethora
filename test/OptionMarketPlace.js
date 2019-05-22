@@ -3,8 +3,7 @@ const ethers = require('ethers')
 const {createMockProvider, deployContract, getWallets, solidity} = require('ethereum-waffle')
 
 const Plethora = require('../build/Plethora')
-const Book = require('../build/Book')
-const BookFactory = require('../build/BookFactory')
+const IOrderBook = require('../build/IOrderBook')
 const CallMarketPlace = require('../build/CallMarketPlace')
 const CoveredEthCallBook = require('../build/CoveredEthCallBook')
 const PutMarketPlace = require('../build/PutMarketPlace')
@@ -25,13 +24,14 @@ describe('CallMarketPlace', function() {
 	let provider = createMockProvider()
 	let [admin, client1, client2, client3] = getWallets(provider)
 	let token
-	let factory
 	let market
 	let client1_book
 	let client2_book
 	let client3_book
+	let client1_balance
+	let client2_balance
+	let client3_balance
 	let book
-	let option_book
 	const quantity_unit = ethers.utils.parseEther('0.01')
 	const price_unit = ethers.utils.bigNumberify(adjust_price(0.125))
 	const max_gas = { gasLimit: 6000000 }
@@ -40,16 +40,20 @@ describe('CallMarketPlace', function() {
 	function q(qty) { return quantity_unit.mul(qty) }
 	function p(px) { return price_unit.mul(px) }
 
+	async function approve(wallet, qty) {
+		const connection = token.connect(wallet)
+		await connection.approve(book.address, qty)
+	}
+
 	async function mint_and_approve(wallet, qty) {
 		const connection = token.connect(wallet)
 		await connection.mint(qty)
-		await connection.approve(option_book.address, qty)
+		await connection.approve(book.address, qty)
 	}
 
 	beforeEach(async () => {
 		token = await deployContract(admin, Plethora, [])
-		factory = await deployContract(admin, BookFactory, [])
-		market = await deployContract(admin, CallMarketPlace, [token.address, factory.address], max_gas)
+		market = await deployContract(admin, CallMarketPlace, [token.address], max_gas)
 
 		const in_two_days = now() + 2*SECONDS_IN_A_DAY
 
@@ -61,16 +65,13 @@ describe('CallMarketPlace', function() {
 		await expect(market.open_book(in_two_days, adjust_price(strike), quantity_unit, gas_and_value))
 			.to.emit(market, "BookOpened")
 
-		const option_book_address = await market.get_book_address( in_two_days, adjust_price(strike) )
-		expect(option_book_address).is.not.eq(0)
+		const book_address = await market.get_book_address( in_two_days, adjust_price(strike) )
+		expect(book_address).is.not.eq(0)
 
-		option_book = new ethers.Contract(option_book_address, CoveredEthCallBook.abi, admin)
-		client1_book = new ethers.Contract(option_book_address, CoveredEthCallBook.abi, client1)
-		client2_book = new ethers.Contract(option_book_address, CoveredEthCallBook.abi, client2)
-		client3_book = new ethers.Contract(option_book_address, CoveredEthCallBook.abi, client3)
-
-		const book_address = await option_book._book()
-		book = new ethers.Contract(book_address, Book.abi, admin)
+		book = new ethers.Contract(book_address, CoveredEthCallBook.abi, admin)
+		client1_book = new ethers.Contract(book_address, CoveredEthCallBook.abi, client1)
+		client2_book = new ethers.Contract(book_address, CoveredEthCallBook.abi, client2)
+		client3_book = new ethers.Contract(book_address, CoveredEthCallBook.abi, client3)
 	})
 
 	it('Bad orders', async () => {
@@ -80,7 +81,7 @@ describe('CallMarketPlace', function() {
 
 		const nominal = nominal_value(q(100), p(3))
 		const tokenFromClient1 = token.connect(client1)
-		await tokenFromClient1.approve(option_book.address, nominal)
+		await tokenFromClient1.approve(book.address, nominal)
 
 		// even with approved tokens the following order should revert
 		// because of bad quantity
@@ -100,7 +101,7 @@ describe('CallMarketPlace', function() {
 		await mint_and_approve(client1, nominal)
 		await client1_book.buy(qty, px, max_gas)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(nominal)
+		expect(await token.balanceOf(book.address)).is.eq(nominal)
 		expect(await token.balanceOf(client1.address)).is.eq(0)
 
 		const order_id = await book.ask_order(0, 0)
@@ -151,11 +152,11 @@ describe('CallMarketPlace', function() {
 
 		const exec_nominal = nominal_value(sell_px, buy_qty)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(0)
+		expect(await token.balanceOf(book.address)).is.eq(0)
 		expect(await token.balanceOf(client1.address)).is.eq(exec_nominal)
 		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal))
-		expect(await option_book.balanceOf(client1.address)).is.eq(sell_qty.sub(buy_qty))
-		expect(await option_book.balanceOf(client2.address)).is.eq(buy_qty)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
+		expect(await book.balanceOf(client2.address)).is.eq(buy_qty)
 	})
 
 	it('Trigger partial buy execution', async () => {
@@ -192,15 +193,62 @@ describe('CallMarketPlace', function() {
 
 		expect(await token.balanceOf(client1.address)).is.eq(exec_1_nominal)
 		expect(await token.balanceOf(client2.address)).is.eq(exec_2_nominal)
-		expect(await token.balanceOf(option_book.address)).is.eq(remaining_buy_nominal)
+		expect(await token.balanceOf(book.address)).is.eq(remaining_buy_nominal)
 		expect(await token.balanceOf(client3.address)).is.eq(
 			buy_nominal
 				.sub(exec_1_nominal)
 				.sub(exec_2_nominal)
 				.sub(remaining_buy_nominal))
-		expect(await option_book.balanceOf(client1.address)).is.eq(0)
-		expect(await option_book.balanceOf(client2.address)).is.eq(0)
-		expect(await option_book.balanceOf(client3.address)).is.eq(sell_qty.mul(2))
+		expect(await book.balanceOf(client1.address)).is.eq(0)
+		expect(await book.balanceOf(client2.address)).is.eq(0)
+		expect(await book.balanceOf(client3.address)).is.eq(sell_qty.mul(2))
+	})
+
+	it('Trigger full secondary buy execution', async () => {
+		const buy_qty = q(100)
+		const buy_px = p(3)
+		const buy_nominal = nominal_value(buy_qty, buy_px)
+		const sell_qty = buy_qty
+		const sell_px = p(2)
+
+		await mint_and_approve(client1, buy_nominal)
+		await client1_book.buy(buy_qty, buy_px, max_gas)
+
+		const gas_and_value = {
+			gasLimit: 6000000,
+			value: sell_qty
+		}
+
+		await client2_book.sell(sell_qty, sell_px, gas_and_value)
+
+		expect(await token.balanceOf(book.address)).is.eq(0)
+		expect(await token.balanceOf(client1.address)).is.eq(0)
+		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal)
+		expect(await book.balanceOf(client1.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client2.address)).is.eq(0)
+
+		await approve(client2, buy_nominal)
+		await client2_book.buy(buy_qty, buy_px, max_gas)
+
+		await client3_book.sell(sell_qty, sell_px, gas_and_value)
+
+		expect(await token.balanceOf(book.address)).is.eq(0)
+		expect(await token.balanceOf(client2.address)).is.eq(0)
+		expect(await token.balanceOf(client3.address)).is.eq(buy_nominal)
+		expect(await book.balanceOf(client1.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client2.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client3.address)).is.eq(0)
+		expect(await book._writers(client1.address)).is.eq(0)
+		expect(await book._writers(client2.address)).is.eq(sell_qty)
+		expect(await book._writers(client3.address)).is.eq(sell_qty)
+
+		await client2_book.cross_call_shares()
+		expect(await book.balanceOf(client1.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client2.address)).is.eq(0)
+		expect(await book.balanceOf(client3.address)).is.eq(0)
+		expect(await book._writers(client1.address)).is.eq(0)
+		expect(await book._writers(client2.address)).is.eq(0)
+		expect(await book._writers(client3.address)).is.eq(sell_qty)
 	})
 
 	it('Trigger full sell execution', async () => {
@@ -227,11 +275,11 @@ describe('CallMarketPlace', function() {
 		const exec_nominal = nominal_value(sell_px, sell_qty)
 		const remaining_buy_nominal = nominal_value(buy_qty.sub(sell_qty), buy_px)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(remaining_buy_nominal)
+		expect(await token.balanceOf(book.address)).is.eq(remaining_buy_nominal)
 		expect(await token.balanceOf(client1.address)).is.eq(exec_nominal)
 		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal).sub(remaining_buy_nominal))
-		expect(await option_book.balanceOf(client1.address)).is.eq(0)
-		expect(await option_book.balanceOf(client2.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
+		expect(await book.balanceOf(client2.address)).is.eq(sell_qty)
 	})
 
 	it('Trigger full secondary sell execution', async () => {
@@ -257,11 +305,11 @@ describe('CallMarketPlace', function() {
 
 		const exec_nominal = nominal_value(sell_px, sell_qty)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(0)
+		expect(await token.balanceOf(book.address)).is.eq(0)
 		expect(await token.balanceOf(client1.address)).is.eq(exec_nominal)
 		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal))
-		expect(await option_book.balanceOf(client1.address)).is.eq(0)
-		expect(await option_book.balanceOf(client2.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
+		expect(await book.balanceOf(client2.address)).is.eq(sell_qty)
 
 		expect(await book.bid_size()).is.eq(1)
 		expect(await book.ask_size()).is.eq(0)
@@ -271,11 +319,14 @@ describe('CallMarketPlace', function() {
 		await mint_and_approve(client3, buy_nominal)
 		await client3_book.buy(buy_qty, buy_px, max_gas)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(0)
+		expect(await token.balanceOf(book.address)).is.eq(0)
 		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal)
 		expect(await token.balanceOf(client3.address)).is.eq(buy_nominal.sub(exec_nominal))
-		expect(await option_book.balanceOf(client2.address)).is.eq(0)
-		expect(await option_book.balanceOf(client3.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client2.address)).is.eq(0)
+		expect(await book.balanceOf(client3.address)).is.eq(sell_qty)
+		expect(await book._writers(client1.address)).is.eq(sell_qty)
+		expect(await book._writers(client2.address)).is.eq(0)
+		expect(await book._writers(client3.address)).is.eq(0)
 	})
 
 	it('Trigger partial sell execution', async () => {
@@ -303,15 +354,14 @@ describe('CallMarketPlace', function() {
 
 		const exec_1_nominal = nominal_value(buy_px_1, buy_qty)
 		const exec_2_nominal = nominal_value(buy_px_2, buy_qty)
-		const remaining_sell_quantity = sell_qty.sub(buy_qty).sub(buy_qty)
 
 		expect(await token.balanceOf(client1.address)).is.eq(0)
 		expect(await token.balanceOf(client2.address)).is.eq(0)
-		expect(await token.balanceOf(option_book.address)).is.eq(0)
+		expect(await token.balanceOf(book.address)).is.eq(0)
 		expect(await token.balanceOf(client3.address)).is.eq(exec_1_nominal.add(exec_2_nominal))
-		expect(await option_book.balanceOf(client1.address)).is.eq(buy_qty)
-		expect(await option_book.balanceOf(client2.address)).is.eq(buy_qty)
-		expect(await option_book.balanceOf(client3.address)).is.eq(remaining_sell_quantity)
+		expect(await book.balanceOf(client1.address)).is.eq(buy_qty)
+		expect(await book.balanceOf(client2.address)).is.eq(buy_qty)
+		expect(await book.balanceOf(client3.address)).is.eq(0)
 	})
 
 	it('Trigger partial secondary sell execution', async () => {
@@ -333,11 +383,11 @@ describe('CallMarketPlace', function() {
 
 		const exec_nominal = nominal_value(sell_px, sell_qty)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(0)
+		expect(await token.balanceOf(book.address)).is.eq(0)
 		expect(await token.balanceOf(client1.address)).is.eq(exec_nominal)
 		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal))
-		expect(await option_book.balanceOf(client1.address)).is.eq(0)
-		expect(await option_book.balanceOf(client2.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
+		expect(await book.balanceOf(client2.address)).is.eq(sell_qty)
 
 		expect(await book.bid_size()).is.eq(1)
 		expect(await book.ask_size()).is.eq(0)
@@ -352,11 +402,14 @@ describe('CallMarketPlace', function() {
 
 		const second_exec_nominal = nominal_value(second_buy_qty, sell_px)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(0)
+		expect(await token.balanceOf(book.address)).is.eq(0)
 		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal).add(second_exec_nominal))
 		expect(await token.balanceOf(client3.address)).is.eq(second_buy_nominal.sub(second_exec_nominal))
-		expect(await option_book.balanceOf(client2.address)).is.eq(sell_qty.sub(second_buy_qty))
-		expect(await option_book.balanceOf(client3.address)).is.eq(second_buy_qty)
+		expect(await book.balanceOf(client2.address)).is.eq(sell_qty.sub(second_buy_qty))
+		expect(await book.balanceOf(client3.address)).is.eq(second_buy_qty)
+		expect(await book._writers(client1.address)).is.eq(sell_qty)
+		expect(await book._writers(client2.address)).is.eq(0)
+		expect(await book._writers(client3.address)).is.eq(0)
 	})
 })
 
@@ -365,13 +418,11 @@ describe('PutMarketPlace', function() {
 	let provider = createMockProvider()
 	let [admin, client1, client2, client3] = getWallets(provider)
 	let token
-	let factory
 	let market
 	let client1_book
 	let client2_book
 	let client3_book
 	let book
-	let option_book
 	const quantity_unit = ethers.utils.parseEther('0.01')
 	const price_unit = ethers.utils.bigNumberify(adjust_price(0.125))
 	const max_gas = { gasLimit: 6000000 }
@@ -380,16 +431,20 @@ describe('PutMarketPlace', function() {
 	function q(qty) { return quantity_unit.mul(qty) }
 	function p(px) { return price_unit.mul(px) }
 
+	async function approve(wallet, qty) {
+		const connection = token.connect(wallet)
+		await connection.approve(book.address, qty)
+	}
+
 	async function mint_and_approve(wallet, qty) {
 		const connection = token.connect(wallet)
 		await connection.mint(qty)
-		await connection.approve(option_book.address, qty)
+		await connection.approve(book.address, qty)
 	}
 
 	beforeEach(async () => {
 		token = await deployContract(admin, Plethora, [])
-		factory = await deployContract(admin, BookFactory, [])
-		market = await deployContract(admin, PutMarketPlace, [token.address, factory.address], max_gas)
+		market = await deployContract(admin, PutMarketPlace, [token.address], max_gas)
 
 		const in_two_days = now() + 2*SECONDS_IN_A_DAY
 
@@ -401,16 +456,13 @@ describe('PutMarketPlace', function() {
 		await expect(market.open_book(in_two_days, adjust_price(strike), quantity_unit, gas_and_value))
 			.to.emit(market, "BookOpened")
 
-		const option_book_address = await market.get_book_address( in_two_days, adjust_price(strike) )
-		expect(option_book_address).is.not.eq(0)
+		const book_address = await market.get_book_address( in_two_days, adjust_price(strike) )
+		expect(book_address).is.not.eq(0)
 
-		option_book = new ethers.Contract(option_book_address, CoveredEthPutBook.abi, admin)
-		client1_book = new ethers.Contract(option_book_address, CoveredEthPutBook.abi, client1)
-		client2_book = new ethers.Contract(option_book_address, CoveredEthPutBook.abi, client2)
-		client3_book = new ethers.Contract(option_book_address, CoveredEthPutBook.abi, client3)
-
-		const book_address = await option_book._book()
-		book = new ethers.Contract(book_address, Book.abi, admin)
+		book = new ethers.Contract(book_address, CoveredEthPutBook.abi, admin)
+		client1_book = new ethers.Contract(book_address, CoveredEthPutBook.abi, client1)
+		client2_book = new ethers.Contract(book_address, CoveredEthPutBook.abi, client2)
+		client3_book = new ethers.Contract(book_address, CoveredEthPutBook.abi, client3)
 	})
 
 	it('Bad orders', async () => {
@@ -422,7 +474,7 @@ describe('PutMarketPlace', function() {
 
 		const nominal = nominal_value(q(100), p(3))
 		const tokenFromClient1 = token.connect(client1)
-		await tokenFromClient1.approve(option_book.address, nominal)
+		await tokenFromClient1.approve(book.address, nominal)
 
 		// even with approved tokens the following 2 orders should revert
 		// because of bad quantity or price
@@ -447,7 +499,7 @@ describe('PutMarketPlace', function() {
 		await mint_and_approve(client1, nominal)
 		await client1_book.buy(qty, px, max_gas)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(nominal)
+		expect(await token.balanceOf(book.address)).is.eq(nominal)
 		expect(await token.balanceOf(client1.address)).is.eq(0)
 
 		const order_id = await book.ask_order(0, 0)
@@ -464,8 +516,8 @@ describe('PutMarketPlace', function() {
 		await client1_book.sell(qty, px, max_gas)
 
 		expect(await token.balanceOf(client1.address)).is.eq(0)
-		expect(await token.balanceOf(option_book.address)).is.eq(put_nominal)
-		expect(await option_book.balanceOf(client1.address)).is.eq(qty)
+		expect(await token.balanceOf(book.address)).is.eq(put_nominal)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
 
 		const order_id = await book.bid_order(0, 0)
 		const order = await book._orders(order_id)
@@ -483,18 +535,18 @@ describe('PutMarketPlace', function() {
 		await mint_and_approve(client1, put_nominal)
 		await client1_book.sell(sell_qty, sell_px, max_gas)
 
-		expect(await option_book.balanceOf(client1.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
+		expect(await token.balanceOf(book.address)).is.eq(put_nominal)
 
 		await mint_and_approve(client2, buy_nominal)
 		await client2_book.buy(buy_qty, buy_px, max_gas)
 
 		const exec_nominal = nominal_value(sell_px, buy_qty)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(put_nominal)
 		expect(await token.balanceOf(client1.address)).is.eq(exec_nominal)
 		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal))
-		expect(await option_book.balanceOf(client1.address)).is.eq(sell_qty.sub(buy_qty))
-		expect(await option_book.balanceOf(client2.address)).is.eq(buy_qty)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
+		expect(await book.balanceOf(client2.address)).is.eq(buy_qty)
 	})
 
 	it('Trigger partial buy execution', async () => {
@@ -513,8 +565,9 @@ describe('PutMarketPlace', function() {
 		await mint_and_approve(client2, put_nominal)
 		await client2_book.sell(sell_qty, sell_px_2, max_gas)
 
-		expect(await option_book.balanceOf(client2.address)).is.eq(sell_qty)
-		expect(await option_book.balanceOf(client1.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client2.address)).is.eq(0)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
+		expect(await token.balanceOf(book.address)).is.eq(put_nominal.mul(2))
 
 		await mint_and_approve(client3, buy_nominal)
 		await client3_book.buy(buy_qty, buy_px, max_gas)
@@ -525,15 +578,52 @@ describe('PutMarketPlace', function() {
 
 		expect(await token.balanceOf(client1.address)).is.eq(exec_1_nominal)
 		expect(await token.balanceOf(client2.address)).is.eq(exec_2_nominal)
-		expect(await token.balanceOf(option_book.address)).is.eq(remaining_buy_nominal.add(put_nominal.mul(2)))
+		expect(await token.balanceOf(book.address)).is.eq(remaining_buy_nominal.add(put_nominal.mul(2)))
 		expect(await token.balanceOf(client3.address)).is.eq(
 			buy_nominal
 				.sub(exec_1_nominal)
 				.sub(exec_2_nominal)
 				.sub(remaining_buy_nominal))
-		expect(await option_book.balanceOf(client1.address)).is.eq(0)
-		expect(await option_book.balanceOf(client2.address)).is.eq(0)
-		expect(await option_book.balanceOf(client3.address)).is.eq(sell_qty.mul(2))
+		expect(await book.balanceOf(client1.address)).is.eq(0)
+		expect(await book.balanceOf(client2.address)).is.eq(0)
+		expect(await book.balanceOf(client3.address)).is.eq(sell_qty.mul(2))
+	})
+
+	it('Trigger full secondary buy execution', async () => {
+		const buy_qty = q(100)
+		const buy_px = p(3)
+		const buy_nominal = nominal_value(buy_qty, buy_px)
+		const sell_qty = buy_qty
+		const sell_px = p(2)
+		const put_nominal = nominal_value(sell_qty, adjust_price(strike))
+
+		await mint_and_approve(client1, buy_nominal)
+		await client1_book.buy(buy_qty, buy_px, max_gas)
+
+		await mint_and_approve(client2, put_nominal)
+		await client2_book.sell(sell_qty, sell_px, max_gas)
+
+		expect(await token.balanceOf(book.address)).is.eq(put_nominal)
+		expect(await token.balanceOf(client1.address)).is.eq(0)
+		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal)
+		expect(await book.balanceOf(client1.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client2.address)).is.eq(0)
+
+		await approve(client2, buy_nominal)
+		await client2_book.buy(buy_qty, buy_px, max_gas)
+
+		await mint_and_approve(client3, put_nominal)
+		await client3_book.sell(sell_qty, sell_px, max_gas)
+
+		expect(await token.balanceOf(book.address)).is.eq(put_nominal)
+		expect(await token.balanceOf(client2.address)).is.eq(put_nominal)
+		expect(await token.balanceOf(client3.address)).is.eq(buy_nominal)
+		expect(await book.balanceOf(client1.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client2.address)).is.eq(0)
+		expect(await book.balanceOf(client3.address)).is.eq(0)
+		expect(await book._writers(client1.address)).is.eq(0)
+		expect(await book._writers(client2.address)).is.eq(0)
+		expect(await book._writers(client3.address)).is.eq(sell_qty)
 	})
 
 	it('Trigger full sell execution', async () => {
@@ -547,7 +637,7 @@ describe('PutMarketPlace', function() {
 		await mint_and_approve(client1, put_nominal)
 		await client1_book.sell(sell_qty, sell_px, max_gas)
 
-		expect(await option_book.balanceOf(client1.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
 
 		await mint_and_approve(client2, buy_nominal)
 		await client2_book.buy(buy_qty, buy_px, max_gas)
@@ -555,11 +645,11 @@ describe('PutMarketPlace', function() {
 		const exec_nominal = nominal_value(sell_px, sell_qty)
 		const remaining_buy_nominal = nominal_value(buy_qty.sub(sell_qty), buy_px)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(remaining_buy_nominal.add(put_nominal))
+		expect(await token.balanceOf(book.address)).is.eq(remaining_buy_nominal.add(put_nominal))
 		expect(await token.balanceOf(client1.address)).is.eq(exec_nominal)
 		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal).sub(remaining_buy_nominal))
-		expect(await option_book.balanceOf(client1.address)).is.eq(0)
-		expect(await option_book.balanceOf(client2.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
+		expect(await book.balanceOf(client2.address)).is.eq(sell_qty)
 	})
 
 	it('Trigger full secondary sell execution', async () => {
@@ -573,18 +663,18 @@ describe('PutMarketPlace', function() {
 		await mint_and_approve(client1, put_nominal)
 		await client1_book.sell(sell_qty, sell_px, max_gas)
 
-		expect(await option_book.balanceOf(client1.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
 
 		await mint_and_approve(client2, buy_nominal)
 		await client2_book.buy(buy_qty, buy_px, max_gas)
 
 		const exec_nominal = nominal_value(sell_px, sell_qty)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(put_nominal)
+		expect(await token.balanceOf(book.address)).is.eq(put_nominal)
 		expect(await token.balanceOf(client1.address)).is.eq(exec_nominal)
 		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal))
-		expect(await option_book.balanceOf(client1.address)).is.eq(0)
-		expect(await option_book.balanceOf(client2.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
+		expect(await book.balanceOf(client2.address)).is.eq(sell_qty)
 
 		expect(await book.bid_size()).is.eq(1)
 		expect(await book.ask_size()).is.eq(0)
@@ -594,11 +684,14 @@ describe('PutMarketPlace', function() {
 		await mint_and_approve(client3, buy_nominal)
 		await client3_book.buy(buy_qty, buy_px, max_gas)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(put_nominal)
+		expect(await token.balanceOf(book.address)).is.eq(put_nominal)
 		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal)
 		expect(await token.balanceOf(client3.address)).is.eq(buy_nominal.sub(exec_nominal))
-		expect(await option_book.balanceOf(client2.address)).is.eq(0)
-		expect(await option_book.balanceOf(client3.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client2.address)).is.eq(0)
+		expect(await book.balanceOf(client3.address)).is.eq(sell_qty)
+		expect(await book._writers(client1.address)).is.eq(sell_qty)
+		expect(await book._writers(client2.address)).is.eq(0)
+		expect(await book._writers(client3.address)).is.eq(0)
 	})
 
 	it('Trigger partial sell execution', async () => {
@@ -624,15 +717,14 @@ describe('PutMarketPlace', function() {
 
 		const exec_1_nominal = nominal_value(buy_qty, buy_px_1)
 		const exec_2_nominal = nominal_value(buy_qty, buy_px_2)
-		const remaining_sell_quantity = sell_qty.sub(buy_qty).sub(buy_qty)
 
 		expect(await token.balanceOf(client1.address)).is.eq(0)
 		expect(await token.balanceOf(client2.address)).is.eq(0)
-		expect(await token.balanceOf(option_book.address)).is.eq(put_nominal)
+		expect(await token.balanceOf(book.address)).is.eq(put_nominal)
 		expect(await token.balanceOf(client3.address)).is.eq(exec_1_nominal.add(exec_2_nominal))
-		expect(await option_book.balanceOf(client1.address)).is.eq(buy_qty)
-		expect(await option_book.balanceOf(client2.address)).is.eq(buy_qty)
-		expect(await option_book.balanceOf(client3.address)).is.eq(remaining_sell_quantity)
+		expect(await book.balanceOf(client1.address)).is.eq(buy_qty)
+		expect(await book.balanceOf(client2.address)).is.eq(buy_qty)
+		expect(await book.balanceOf(client3.address)).is.eq(0)
 	})
 
 	it('Trigger partial secondary sell execution', async () => {
@@ -646,18 +738,18 @@ describe('PutMarketPlace', function() {
 		await mint_and_approve(client1, put_nominal)
 		await client1_book.sell(sell_qty, sell_px, max_gas)
 
-		expect(await option_book.balanceOf(client1.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
 
 		await mint_and_approve(client2, buy_nominal)
 		await client2_book.buy(buy_qty, buy_px, max_gas)
 
 		const exec_nominal = nominal_value(sell_px, sell_qty)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(put_nominal)
+		expect(await token.balanceOf(book.address)).is.eq(put_nominal)
 		expect(await token.balanceOf(client1.address)).is.eq(exec_nominal)
 		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal))
-		expect(await option_book.balanceOf(client1.address)).is.eq(0)
-		expect(await option_book.balanceOf(client2.address)).is.eq(sell_qty)
+		expect(await book.balanceOf(client1.address)).is.eq(0)
+		expect(await book.balanceOf(client2.address)).is.eq(sell_qty)
 
 		expect(await book.bid_size()).is.eq(1)
 		expect(await book.ask_size()).is.eq(0)
@@ -672,10 +764,13 @@ describe('PutMarketPlace', function() {
 
 		const second_exec_nominal = nominal_value(sell_px, second_buy_qty)
 
-		expect(await token.balanceOf(option_book.address)).is.eq(put_nominal)
+		expect(await token.balanceOf(book.address)).is.eq(put_nominal)
 		expect(await token.balanceOf(client2.address)).is.eq(buy_nominal.sub(exec_nominal).add(second_exec_nominal))
 		expect(await token.balanceOf(client3.address)).is.eq(second_buy_nominal.sub(second_exec_nominal))
-		expect(await option_book.balanceOf(client2.address)).is.eq(sell_qty.sub(second_buy_qty))
-		expect(await option_book.balanceOf(client3.address)).is.eq(second_buy_qty)
+		expect(await book.balanceOf(client2.address)).is.eq(sell_qty.sub(second_buy_qty))
+		expect(await book.balanceOf(client3.address)).is.eq(second_buy_qty)
+		expect(await book._writers(client1.address)).is.eq(sell_qty)
+		expect(await book._writers(client2.address)).is.eq(0)
+		expect(await book._writers(client3.address)).is.eq(0)
 	})
 })

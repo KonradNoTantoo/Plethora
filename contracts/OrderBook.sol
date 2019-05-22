@@ -5,11 +5,27 @@ pragma experimental ABIEncoderV2;
 import "Common.sol";
 
 
-contract Book is IBook {
+contract IOrderBook {
 	event BuyOrder(bytes32 id);
 	event SellOrder(bytes32 id);
 	event Cancelled(bytes32 id);
 	event Hit(bytes32 hit_order, address buyer, address seller, uint price, uint quantity);
+
+	struct Order {
+		uint quantity;
+		uint price;
+		address issuer;
+		uint128 alive;
+		uint128 is_buy;
+	}
+
+	struct Execution {
+		uint time;
+		uint price;
+		uint quantity;
+		address buyer;
+		address seller;
+	}
 
 	struct Entry {
 		int signed_price;
@@ -22,15 +38,9 @@ contract Book is IBook {
 	mapping (bytes32 => Order) public _orders;
 	uint public _order_quantity_unit;
 
-	IBookOwner public _owner;
-
-	constructor(
-			IBookOwner owner
-		,	uint order_quantity_unit
-		) public {
+	constructor(uint order_quantity_unit) public {
 		require(order_quantity_unit > 0);
 		_order_quantity_unit = order_quantity_unit;
-		_owner = owner;
 	}
 
 	function nb_executions() external view returns(uint nb) {
@@ -108,8 +118,8 @@ contract Book is IBook {
 		_new_entry(entries, 0, price, order_id);
 	}
 
-	function sell(address issuer, uint quantity, uint price) external returns(uint remaining_quantity) {
-		require( msg.sender == address(_owner) && _is_order_legal(quantity, price) );
+	function _sell(uint quantity, uint price) internal returns(uint remaining_quantity) {
+		require( _is_order_legal(quantity, price) );
 
 		int signed_price = int(price);
 		remaining_quantity = quantity;
@@ -127,9 +137,10 @@ contract Book is IBook {
 
 				if ( o.alive == 1 ) {
 					Execution memory e;
-					e.seller = issuer;
-					e.buyer = o.issuer;
+					e.time = now;
 					e.price = uint(-entry.signed_price);
+					e.buyer = o.issuer;
+					e.seller = msg.sender;
 
 					if ( o.quantity <= remaining_quantity ) {
 						e.quantity = o.quantity;
@@ -142,7 +153,7 @@ contract Book is IBook {
 					remaining_quantity -= e.quantity;
 
 					_on_execution(order_id, e);
-					_owner.on_sell_execution(e.buyer, issuer, e.quantity, e.price);
+					_on_sell_execution(e.buyer, msg.sender, e.quantity, e.price);
 				}
 
 				if (remaining_quantity == 0) {
@@ -157,9 +168,9 @@ contract Book is IBook {
 		Order memory o;
 		o.quantity = remaining_quantity;
 		o.price = price;
-		o.issuer = issuer;
+		o.issuer = msg.sender;
 		o.alive = 1;
-		bytes32 order_id = keccak256(abi.encodePacked(now, issuer, price));
+		bytes32 order_id = keccak256(abi.encodePacked(now, msg.sender, price));
 		require(_orders[order_id].alive == 0); // avoid collision
 		_orders[order_id] = o;
 
@@ -167,8 +178,8 @@ contract Book is IBook {
 		emit SellOrder(order_id);
 	}
 
-	function buy(address issuer, uint quantity, uint price) external returns(uint remaining_quantity) {
-		require( msg.sender == address(_owner) && _is_order_legal(quantity, price) );
+	function _buy(uint quantity, uint price) internal returns(uint remaining_quantity) {
+		require( _is_order_legal(quantity, price) );
 
 		int signed_price = int(price);
 		remaining_quantity = quantity;
@@ -186,9 +197,10 @@ contract Book is IBook {
 
 				if ( o.alive == 1 ) {
 					Execution memory e;
-					e.seller = o.issuer;
-					e.buyer = issuer;
+					e.time = now;
 					e.price = uint(entry.signed_price);
+					e.buyer = msg.sender;
+					e.seller = o.issuer;
 
 					if ( o.quantity <= remaining_quantity ) {
 						e.quantity = o.quantity;
@@ -201,7 +213,7 @@ contract Book is IBook {
 					remaining_quantity -= e.quantity;
 
 					_on_execution(order_id, e);
-					_owner.on_buy_execution(issuer, e.seller, e.quantity, e.price);
+					_on_buy_execution(msg.sender, e.seller, e.quantity, e.price);
 				}
 
 				if (remaining_quantity == 0) {
@@ -216,10 +228,10 @@ contract Book is IBook {
 		Order memory o;
 		o.quantity = remaining_quantity;
 		o.price = price;
-		o.issuer = issuer;
+		o.issuer = msg.sender;
 		o.alive = 1;
 		o.is_buy = 1;
-		bytes32 order_id = keccak256(abi.encodePacked(now, issuer, price));
+		bytes32 order_id = keccak256(abi.encodePacked(now, msg.sender, price));
 		require(_orders[order_id].alive == 0); // avoid collision
 		_orders[order_id] = o;
 
@@ -227,29 +239,19 @@ contract Book is IBook {
 		emit BuyOrder(order_id);
 	}
 
-	function cancel(address issuer, bytes32 order_id) external returns(Order memory order) {
+	function _cancel(bytes32 order_id) internal returns(Order memory order) {
 		order = _orders[order_id];
-		require(
-				order.alive == 1 && order.issuer == issuer
-			&&	msg.sender == address(_owner)
-			);
+		require(order.alive == 1 && order.issuer == msg.sender);
 		delete _orders[order_id];
 		emit Cancelled(order_id);
 	}
 
-	function clear() external {
-		require( msg.sender == address(_owner) );
-
+	function _clear() internal {
 		delete _bid;
 		delete _ask;
 		delete _executions;
 	}
-}
 
-
-contract BookFactory is IBookFactory {
-	function create(uint order_quantity_unit) external returns(IBook book)
-	{
-		return new Book(IBookOwner(msg.sender), order_quantity_unit);
-	}
+	function _on_buy_execution(address buyer, address seller, uint quantity, uint price) internal;
+	function _on_sell_execution(address buyer, address seller, uint quantity, uint price) internal;
 }

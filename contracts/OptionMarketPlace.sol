@@ -3,32 +3,35 @@ pragma experimental ABIEncoderV2;
 
 
 import "CoveredOption.sol";
+import "OrderBook.sol";
 
 
-contract CoveredEthCallBook is CoveredEthCall, IBookOwner {
-	IBook public _book;
-
+contract CoveredEthCallBook is CoveredEthCall, IOrderBook {
 	constructor(
 			IERC20 erc20_minter
 		,	uint strike_per_underlying_unit
 		,	uint expiry
-		,	IBookFactory factory
 		,	uint order_quantity_unit
 		) public
 		CoveredEthCall(erc20_minter, strike_per_underlying_unit, expiry)
+		IOrderBook(order_quantity_unit)
 	{
-		_book = factory.create(order_quantity_unit);
 	}
 
 	function buy(uint quantity, uint price) external {
 		require( false == _is_expired() );
 
-		uint remaining_quantity = _book.buy(msg.sender, quantity, price);
+		uint remaining_quantity = _buy(quantity, price);
 
 		if ( remaining_quantity > 0 )
 		{
 			_erc20_minter.transferFrom(msg.sender, address(this),
 				PriceLib.nominal_value(remaining_quantity, price));
+		}
+
+		if ( remaining_quantity != quantity )
+		{
+			_cross_call_shares(msg.sender);
 		}
 	}
 
@@ -39,31 +42,65 @@ contract CoveredEthCallBook is CoveredEthCall, IBookOwner {
 
 		if ( free_quantity < quantity )
 		{
-			uint missing_quantity = quantity - free_quantity;
-			require( msg.value == missing_quantity );
-			_emit_shares_for_self(msg.sender, missing_quantity);
+			require( msg.value == quantity - free_quantity );
+			_lock(msg.sender, free_quantity);
+		}
+		else
+		{
+			_lock(msg.sender, quantity);
 		}
 
-		_lock(msg.sender, quantity);
-		_book.sell(msg.sender, quantity, price);
+		uint remaining_quantity = _sell(quantity, price);
+
+		if ( remaining_quantity != quantity )
+		{
+			_cross_call_shares(msg.sender);
+		}
 	}
 
-	function on_buy_execution(address buyer, address seller, uint quantity, uint price) external {
-		require( msg.sender == address(_book) );
-		_transfer_locked(seller, buyer, quantity);
+	function _on_buy_execution(address buyer, address seller, uint quantity, uint price) internal {
+		uint locked_quantity = _locked_shares[seller];
+
+		if ( locked_quantity >= quantity )
+		{
+			_transfer_locked(seller, buyer, quantity);
+		}
+		else
+		{
+			_emit_shares(seller, buyer, quantity - locked_quantity);
+			_transfer_locked(seller, buyer, locked_quantity);
+			// crossing here engenders vulnerability, if seller has a
+			// malicious anynonymous paiement method
+			// _cross_call_shares(seller);
+		}
+
 		_erc20_minter.transferFrom(buyer, seller,
 			PriceLib.nominal_value(quantity, price));
 	}
 
-	function on_sell_execution(address buyer, address seller, uint quantity, uint price) external {
-		require( msg.sender == address(_book) );
-		_transfer_locked(seller, buyer, quantity);
+	function _on_sell_execution(address buyer, address seller, uint quantity, uint price) internal {
+		uint locked_quantity = _locked_shares[seller];
+
+		if ( locked_quantity >= quantity )
+		{
+			_transfer_locked(seller, buyer, quantity);
+		}
+		else
+		{
+			_emit_shares(seller, buyer, quantity - locked_quantity);
+			_transfer_locked(seller, buyer, locked_quantity);
+		}
+
+		// crossing here engenders vulnerability, if buyer has a
+		// malicious anynonymous paiement method
+		// _cross_call_shares(buyer);
+
 		_erc20_minter.transfer(seller,
 			PriceLib.nominal_value(quantity, price));
 	}
 
 	function cancel(bytes32 order_id) external {
-		IBook.Order memory order = _book.cancel(msg.sender, order_id);
+		IOrderBook.Order memory order = _cancel(order_id);
 
 		if( order.is_buy != 0 )
 		{
@@ -72,42 +109,54 @@ contract CoveredEthCallBook is CoveredEthCall, IBookOwner {
 		}
 		else
 		{
-			_unlock(msg.sender, order.quantity);
+			uint locked_quantity = _locked_shares[msg.sender];
+
+			if ( locked_quantity >= order.quantity )
+			{
+				_unlock(msg.sender, order.quantity);
+			}
+			else
+			{
+				_unlock(msg.sender, locked_quantity);
+				msg.sender.transfer(order.quantity - locked_quantity);
+			}
 		}
 	}
 
 	function liquidate(address payable liquidator) external {
-		_book.clear();
+		_clear();
 		_liquidate(liquidator);
 	}
 }
 
 
-contract CoveredEthPutBook is CoveredEthCall, IBookOwner
+contract CoveredEthPutBook is CoveredEthPut, IOrderBook
 {
-	IBook public _book;
-
 	constructor(
 			IERC20 erc20_minter
 		,	uint strike_per_underlying_unit
 		,	uint expiry
-		,	IBookFactory factory
 		,	uint order_quantity_unit
 		) public
-		CoveredEthCall(erc20_minter, strike_per_underlying_unit, expiry)
+		CoveredEthPut(erc20_minter, strike_per_underlying_unit, expiry)
+		IOrderBook(order_quantity_unit)
 	{
-		_book = factory.create(order_quantity_unit);
 	}
 
 	function buy(uint quantity, uint price) external {
 		require( false == _is_expired() );
 
-		uint remaining_quantity = _book.buy(msg.sender, quantity, price);
+		uint remaining_quantity = _buy(quantity, price);
 
 		if ( remaining_quantity > 0 )
 		{
 			_erc20_minter.transferFrom(msg.sender, address(this),
 				PriceLib.nominal_value(remaining_quantity, price));
+		}
+
+		if ( remaining_quantity != quantity )
+		{
+			_cross_put_shares(msg.sender);
 		}
 	}
 
@@ -118,32 +167,62 @@ contract CoveredEthPutBook is CoveredEthCall, IBookOwner
 
 		if ( free_quantity < quantity )
 		{
-			uint missing_quantity = quantity - free_quantity;
 			_erc20_minter.transferFrom(msg.sender, address(this),
-				PriceLib.nominal_value(missing_quantity, _strike_per_underlying_unit));
-			_emit_shares_for_self(msg.sender, missing_quantity);
+				PriceLib.nominal_value(quantity - free_quantity, _strike_per_underlying_unit));
+			_lock(msg.sender, free_quantity);
+		}
+		else
+		{
+			_lock(msg.sender, quantity);
 		}
 
-		_lock(msg.sender, quantity);
-		_book.sell(msg.sender, quantity, price);
+		uint remaining_quantity = _sell(quantity, price);
+
+		if ( remaining_quantity != quantity )
+		{
+			_cross_put_shares(msg.sender);
+		}
 	}
 
-	function on_buy_execution(address buyer, address seller, uint quantity, uint price) external {
-		require( msg.sender == address(_book) );
-		_transfer_locked(seller, buyer, quantity);
+	function _on_buy_execution(address buyer, address seller, uint quantity, uint price) internal {
+		uint locked_quantity = _locked_shares[seller];
+
+		if ( locked_quantity >= quantity )
+		{
+			_transfer_locked(seller, buyer, quantity);
+		}
+		else
+		{
+			_emit_shares(seller, buyer, quantity - locked_quantity);
+			_transfer_locked(seller, buyer, locked_quantity);
+			_cross_put_shares(seller);
+		}
+
 		_erc20_minter.transferFrom(buyer, seller,
 			PriceLib.nominal_value(quantity, price));
 	}
 
-	function on_sell_execution(address buyer, address seller, uint quantity, uint price) external {
-		require( msg.sender == address(_book) );
-		_transfer_locked(seller, buyer, quantity);
+	function _on_sell_execution(address buyer, address seller, uint quantity, uint price) internal {
+		uint locked_quantity = _locked_shares[seller];
+
+		if ( locked_quantity >= quantity )
+		{
+			_transfer_locked(seller, buyer, quantity);
+		}
+		else
+		{
+			_emit_shares(seller, buyer, quantity - locked_quantity);
+			_transfer_locked(seller, buyer, locked_quantity);
+		}
+
+		_cross_put_shares(buyer);
+
 		_erc20_minter.transfer(seller,
 			PriceLib.nominal_value(quantity, price));
 	}
 
 	function cancel(bytes32 order_id) external {
-		IBook.Order memory order = _book.cancel(msg.sender, order_id);
+		IOrderBook.Order memory order = _cancel(order_id);
 
 		if( order.is_buy != 0 )
 		{
@@ -152,12 +231,23 @@ contract CoveredEthPutBook is CoveredEthCall, IBookOwner
 		}
 		else
 		{
-			_unlock(msg.sender, order.quantity);
+			uint locked_quantity = _locked_shares[msg.sender];
+
+			if ( locked_quantity >= order.quantity )
+			{
+				_unlock(msg.sender, order.quantity);
+			}
+			else
+			{
+				_unlock(msg.sender, locked_quantity);
+				_erc20_minter.transfer(msg.sender,
+					PriceLib.nominal_value(order.quantity - locked_quantity, _strike_per_underlying_unit));
+			}
 		}
 	}
 
 	function liquidate(address payable liquidator) external {
-		_book.clear();
+		_clear();
 		_liquidate(liquidator);
 	}
 }
@@ -171,15 +261,13 @@ contract OptionMarketPlace {
 	uint constant BOOK_OPENING_FEE = 10 finney;
 
 	IERC20 public _pricing_token_vault;
-	IBookFactory public _book_factory;
 
 	// strike => expiry => address
 	mapping(uint => mapping(uint => address)) public _books;
 	address[] public _book_addresses;
 
-	constructor(address pricing_token_vault, address book_factory) public {
+	constructor(address pricing_token_vault) public {
 		_pricing_token_vault = IERC20(pricing_token_vault);
-		_book_factory = IBookFactory(book_factory);
 	}
 
 	function get_book_address(uint expiry, uint strike_per_underlying_unit) external view returns(address book) {
@@ -214,8 +302,7 @@ contract OptionMarketPlace {
 
 
 contract CallMarketPlace is OptionMarketPlace {
-	constructor(address pricing_token_vault, address book_factory) public
-		OptionMarketPlace(pricing_token_vault, book_factory) {}
+	constructor(address pricing_token_vault) public OptionMarketPlace(pricing_token_vault) {}
 
 	function open_book(uint expiry, uint strike_per_underlying_unit, uint order_quantity_unit) external payable {
 		require( msg.value == BOOK_OPENING_FEE );
@@ -226,7 +313,6 @@ contract CallMarketPlace is OptionMarketPlace {
 					_pricing_token_vault
 				,	strike_per_underlying_unit
 				,	expiry
-				,	_book_factory
 				,	order_quantity_unit
 			)
 		);
@@ -240,8 +326,7 @@ contract CallMarketPlace is OptionMarketPlace {
 
 
 contract PutMarketPlace is OptionMarketPlace {
-	constructor(address pricing_token_vault, address book_factory) public
-		OptionMarketPlace(pricing_token_vault, book_factory) {}
+	constructor(address pricing_token_vault) public OptionMarketPlace(pricing_token_vault) {}
 
 	function open_book(uint expiry, uint strike_per_underlying_unit, uint order_quantity_unit) external payable {
 		require( msg.value == BOOK_OPENING_FEE );
@@ -252,7 +337,6 @@ contract PutMarketPlace is OptionMarketPlace {
 					_pricing_token_vault
 				,	strike_per_underlying_unit
 				,	expiry
-				,	_book_factory
 				,	order_quantity_unit
 			)
 		);

@@ -12,7 +12,7 @@ const {expect} = chai
 
 function now() { return Math.floor(Date.now()/1000) }
 function next_minute() { return now() + 60 }
-function in_one_second() { return now() + 1 }
+function in_two_seconds() { return now() + 2 }
 const PRICE_ADJUSTMENT = 2**3
 function adjust_price(p) { return p*PRICE_ADJUSTMENT }
 
@@ -35,7 +35,7 @@ describe('CoveredEthCall', function() {
 
 	beforeEach(async () => {
 		token = await deployContract(admin, Plethora, [])
-		call = await deployContract(admin, CoveredEthCall, [token.address, adjust_price(strike), in_one_second()], max_gas)
+		call = await deployContract(admin, CoveredEthCall, [token.address, adjust_price(strike), in_two_seconds()], max_gas)
 
 		await token.mintFor(client1.address, nb_tokens)
 
@@ -60,6 +60,7 @@ describe('CoveredEthCall', function() {
 		expect(await call.balanceOf(writer1.address)).to.eq(0)
 		expect(await call._strike_per_underlying_unit()).to.eq(adjust_price(strike))
 		expect(await token.balanceOf(client1.address)).to.eq(nb_tokens)
+		expect(await provider.getBalance(call.address)).to.eq(underlying_nominal)
 	})
 
 	it('Transfer adds amount to destination account', async () => {
@@ -93,7 +94,7 @@ describe('CoveredEthCall', function() {
 
 	it('Exercise', async () => {
 		await expect(callFromClient1.call(underlying_nominal)).to.be.reverted // not yet expired
-		await sleep(1100)
+		await sleep(2100)
 		expect(await call._expiry()).to.be.at.most(now())
 		await expect(callFromClient1.call(underlying_nominal)).to.be.reverted // expired but no approval
 		const tokenFromClient1 = token.connect(client1)
@@ -123,7 +124,7 @@ describe('CoveredEthPut', function() {
 
 	beforeEach(async () => {
 		token = await deployContract(admin, Plethora, [])
-		put = await deployContract(admin, CoveredEthPut, [token.address, adjust_price(strike), in_one_second()], max_gas)
+		put = await deployContract(admin, CoveredEthPut, [token.address, adjust_price(strike), in_two_seconds()], max_gas)
 
 		await token.mintFor(writer1.address, nb_tokens)
 
@@ -184,11 +185,11 @@ describe('CoveredEthPut', function() {
 			value: underlying_nominal
 		}
 		await expect(putFromClient1.put(override)).to.be.reverted // not yet expired
-		await sleep(1100)
+		await sleep(2100)
 		expect(await put._expiry()).to.be.at.most(now())
 		await putFromClient1.put(override)
-		// TODO find a way to check balance of put contract
 		expect(await token.balanceOf(client1.address)).to.eq(nb_tokens)
 		expect(await put.balanceOf(client1.address)).to.eq(0)
+		expect(await provider.getBalance(put.address)).to.eq(underlying_nominal)
 	})
 })
