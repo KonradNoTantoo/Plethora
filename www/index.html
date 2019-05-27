@@ -55,7 +55,7 @@
 						<div>
 							<p data-ng-repeat="book in put_books" data-ng-class="[book.class,'book-label']">
 								{{ book.label }}
-								<button data-ng-click="pin_call(book)" class="book-button">Pin</button>
+								<button data-ng-click="pin_put(book)" class="book-button">Pin</button>
 							</p>
 						</div>
 					</div>
@@ -104,7 +104,8 @@
 						<div>
 							<div data-ng-repeat="book in call_books" class="book">
 								<h5 data-ng-bind="book.label" data-ng-class="book.class"></h5>
-								<h4 data-ng-bind="book.position | currency: '\u29EB': 2" class="position"></h4>
+								<h4 data-ng-bind="book.position | currency: '\u29EB': 3" class="position"></h4>
+								<h4 data-ng-if="book.exposition != 0" data-ng-bind="book.exposition | currency: '\u2B19': 3" class="position"></h4>
 								<div data-ng-if="book.alive">
 									<div class="bid">
 										<p>Bid</p>
@@ -135,6 +136,19 @@
 									</form>
 									<div id="{{ book.id + '-order-wait' }}" class="wait"></div>
 								</div>
+								<form id="{{ book.id + '-apply-form' }}" data-ng-if="book.can_apply">
+									&#x29EB;<input data-ng-model="book.apply.quantity" type="number" step="{{ book.quantity_unit }}" min="{{ book.quantity_unit }}" max="{{ book.position }}" required="">
+									<div data-ng-if="book.apply.quantity >= book.quantity_unit && book.apply.quantity <= book.position">
+										<button data-ng-click="call(book)">Call</button>
+										<p>Gain: {{ (book.apply.quantity * book.strike)/8 | currency: '\u2B19': 3}}</p>
+									</div>
+								</form>
+								<form id="{{ book.id + '-settle-form' }}" data-ng-if="book.can_settle">
+									<button data-ng-click="settle(book)">Settle</button>
+								</form>
+								<form id="{{ book.id + '-liquidate-form' }}" data-ng-if="book.can_liquidate">
+									<button data-ng-click="liquidate(book)">Liquidate</button>
+								</form>
 							</div>
 						</div>
 					</div>
@@ -143,7 +157,8 @@
 						<div>
 							<div data-ng-repeat="book in put_books" class="book">
 								<h5 data-ng-bind="book.label" data-ng-class="book.class"></h5>
-								<h4 data-ng-bind="book.position | currency: '\u29EB': 2" class="position"></h4>
+								<h4 data-ng-bind="book.position | currency: '\u29EB': 3" class="position"></h4>
+								<h4 data-ng-if="book.exposition != 0" data-ng-bind="book.exposition | currency: '\u2B19': 3" class="position"></h4>
 								<div data-ng-if="book.alive">
 									<div class="bid">
 										<p>Bid</p>
@@ -174,6 +189,20 @@
 									</form>
 									<div id="{{ book.id + '-order-wait' }}" class="wait"></div>
 								</div>
+								<form id="{{ book.id + '-apply-form' }}" data-ng-if="book.can_apply">
+									&#x29EB;<input data-ng-model="book.apply.quantity" type="number" step="{{ book.quantity_unit }}" min="{{ book.quantity_unit }}" max="{{ book.position }}" required="">
+									<button data-ng-click="put(book)">Put</button>
+									<div data-ng-if="book.apply.quantity >= book.quantity_unit && book.apply.quantity <= book.position">
+										<button data-ng-click="put(book)">Put</button>
+										<p>Gain: {{ (book.apply.quantity * book.strike)/8 | currency: '\u2B19': 3}}</p>
+									</div>
+								</form>
+								<form id="{{ book.id + '-settle-form' }}" data-ng-if="book.can_settle">
+									<button data-ng-click="settle(book)">Settle</button>
+								</form>
+								<form id="{{ book.id + '-liquidate-form' }}" data-ng-if="book.can_liquidate">
+									<button data-ng-click="liquidate(book)">Liquidate</button>
+								</form>
 							</div>
 						</div>
 					</div>

@@ -124,12 +124,17 @@ function book_class(expiry) {
 	return 'active-book'
 }
 
-async function compute_position(contract) {
+async function get_position(contract) {
 	const [nominal_shares, written_shares] = await Promise.all([
 		contract._nominal_shares(dapp.address),
 		contract._writers(dapp.address),
 		])
 
+	return [nominal_shares, written_shares]
+}
+
+async function compute_position(contract) {
+	const [nominal_shares, written_shares] = await get_position(contract)
 	return nominal_shares.sub(written_shares)
 }
 
@@ -209,6 +214,55 @@ const pinned_books_ctrl = ($scope) => {
 	$scope.put_book_contracts = {}
 	$scope.call_book_addresses = array_from_storage('pinned_call_book_addresses')
 	$scope.put_book_addresses = array_from_storage('pinned_put_book_addresses')
+
+	$scope.call = async(book) => {
+		const quantity = ethers.utils.parseEther( book.apply.quantity.toString() )
+		await $scope.approve_if_needed(book.contract.address, nominal_value(quantity, book.strike))
+
+		try {
+			const tx = await book.contract.call(quantity, {gasLimit: MAX_GAS})
+			await tx.wait()
+		} catch( err ) {
+			show_error("Cannot apply option", err)
+		}
+
+		$scope.compute_position(book)
+	}
+
+	$scope.put = async(book) => {
+		const quantity = ethers.utils.parseEther( book.apply.quantity.toString() )
+
+		try {
+			const tx = await book.contract.put({value: quantity, gasLimit: MAX_GAS})
+			await tx.wait()
+		} catch( err ) {
+			show_error("Cannot apply option", err)
+		}
+
+		$scope.compute_position(book)
+	}
+
+	$scope.settle = async(book) => {
+		try {
+			const tx = await book.contract.settle({gasLimit: MAX_GAS})
+			await tx.wait()
+		} catch( err ) {
+			show_error("Cannot settle option", err)
+		}
+
+		$scope.compute_position(book)
+	}
+
+	$scope.liquidate = async(book) => {
+		try {
+			const tx = await book.contract.liquidate()
+			await tx.wait()
+		} catch( err ) {
+			show_error("Cannot liquidate option", err)
+		}
+
+		$scope.compute_position(book)
+	}
 
 	$scope.cancel = async(order) => {
 		try {
@@ -370,20 +424,22 @@ const pinned_books_ctrl = ($scope) => {
 	}
 
 	$scope.compute_position = async (book) => {
-		const [position, can_liquidate] = await Promise.all([compute_position(book.contract), book.contract.can_liquidate()]) 
+		const [[nominal_shares, written_shares], can_liquidate] = await Promise.all([
+			get_position(book.contract), book.contract.can_liquidate() ])
+		const position = nominal_shares.sub(written_shares)
 		book.can_liquidate = can_liquidate
 		book.position = ethers.utils.formatEther(position)
 
-		if (position.isZero()) {
+		if (nominal_shares.eq(written_shares)) {
 			book.exposition = 0
 			book.can_apply = false
 			book.can_settle = false
-		} else if (position.lt(0)) {
-			book.exposition = nominal_value(position.mul(-1), book.strike).toString()
+		} else if (nominal_shares.gt(written_shares)) {
+			book.exposition = ethers.utils.formatEther(nominal_value(position, book.strike).toString())
 			book.can_apply = await book.contract.can_apply()
 			book.can_settle = false
 		} else {
-			book.exposition = nominal_value(position, book.strike).toString()
+			book.exposition = ethers.utils.formatEther(nominal_value(written_shares.sub(nominal_shares), book.strike).toString())
 			book.can_apply = false
 			book.can_settle = await book.contract.can_settle()
 		}
@@ -400,6 +456,7 @@ const pinned_books_ctrl = ($scope) => {
 		const book = {
 			id: book_node_id(book_contract.address),
 			order: {way:'B'},
+			apply: {},
 			class: class_name,
 			bid: [],
 			ask: [],
